@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* 메인 브랜드 컬러 — 딥 그린 (일관된 디자인용) */
+@theme {
+  --color-primary: #15803d;
+  --color-primary-dark: #166534;
+}
