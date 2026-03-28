@@ -48,6 +48,7 @@ export default function AttendanceGrid() {
   const [members, setMembers] = useState<Member[]>([])
   const [attendedSet, setAttendedSet] = useState<Set<string>>(new Set())
   const [datesWithData, setDatesWithData] = useState<Set<string>>(new Set())
+  const [visitorCountByDate, setVisitorCountByDate] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -116,9 +117,28 @@ export default function AttendanceGrid() {
           attended.add(`${a.member_id}_${a.date}`)
           withData.add(a.date)
         }
+        const { data: visitorData, error: errV } = await supabase
+          .from('visitors')
+          .select('date')
+          .gte('date', start)
+          .lte('date', end)
+
+        if (errV) {
+          setError(errV.message)
+          setLoading(false)
+          return
+        }
+
+        const visitorCount = new Map<string, number>()
+        for (const v of visitorData ?? []) {
+          const vv = v as { date: string }
+          visitorCount.set(vv.date, (visitorCount.get(vv.date) ?? 0) + 1)
+        }
+
         setMembers((memberData ?? []) as Member[])
         setAttendedSet(attended)
         setDatesWithData(withData)
+        setVisitorCountByDate(visitorCount)
       } catch {
         setError('데이터를 불러오지 못했습니다.')
       } finally {
@@ -387,6 +407,57 @@ export default function AttendanceGrid() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 새가족 탭: 방문자 출석 수 그리드 */}
+      {tab === 'new' && dates.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-slate-700 mb-3">방문자 출석 수</h3>
+          <div className="overflow-x-auto">
+            <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[8rem] whitespace-nowrap">
+                    날짜
+                  </th>
+                  {dates.map((d) => (
+                    <th
+                      key={d}
+                      className="p-2 text-center min-w-[2.5rem] font-medium text-slate-700"
+                    >
+                      <Link
+                        to={`/dashboard/attendance/${d}`}
+                        className="block text-primary hover:text-primary-dark hover:underline"
+                      >
+                        {formatDateCol(d)}
+                      </Link>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-2 font-medium text-slate-700 sticky left-0 bg-white border-r border-slate-200 whitespace-nowrap">
+                    방문자 수
+                  </td>
+                  {dates.map((d) => (
+                    <td key={d} className="p-1 text-center">
+                      {visitorCountByDate.has(d) ? (
+                        <span className="text-sm font-semibold text-slate-600">
+                          {visitorCountByDate.get(d)}
+                        </span>
+                      ) : datesWithData.has(d) ? (
+                        <span className="text-slate-300">0</span>
+                      ) : (
+                        <span className="text-slate-200">·</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
