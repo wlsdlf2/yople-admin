@@ -111,7 +111,7 @@ export default function DashboardLayout() {
           </button>
         </header>
         <main className="p-4 sm:p-6 flex-1 overflow-auto">
-          <div className="max-w-4xl mx-auto">
+          <div className={sidebarCollapsed ? 'w-full' : 'max-w-4xl mx-auto'}>
             <Outlet />
           </div>
         </main>
