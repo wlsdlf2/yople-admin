@@ -27,6 +27,8 @@ export default function MemberList() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [search, setSearch] = useState('')
+  const [filterNew, setFilterNew] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<{ success: number; fail: number; errors: string[] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -183,56 +185,35 @@ export default function MemberList() {
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="이름으로 검색"
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 w-48"
+        />
+        <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={filterNew}
+            onChange={(e) => setFilterNew(e.target.checked)}
+            className="rounded border-slate-300"
+          />
+          새가족만 보기
+        </label>
+        <span className="text-sm text-slate-400 ml-auto">
+          {list.filter((m) => {
+            const matchSearch = m.name.includes(search.trim())
+            const matchNew = !filterNew || m.is_new_member
+            return matchSearch && matchNew
+          }).length}명
+        </span>
+      </div>
+
       {error && (
         <p className="text-red-600 bg-red-50 rounded-lg p-3 mb-4">{error}</p>
       )}
-
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
-        <h3 className="font-medium text-slate-800 mb-2">일괄 등록</h3>
-        <p className="text-slate-600 text-sm mb-3">
-          양식을 다운로드해 정보를 입력한 뒤 엑셀 파일을 업로드하면 한 번에 등록됩니다.
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => downloadMemberTemplate()}
-            className="px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50"
-          >
-            양식 다운로드
-          </button>
-          <label className="px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark cursor-pointer">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={handleUpload}
-              disabled={uploading}
-            />
-            {uploading ? '업로드 중…' : '엑셀 파일 업로드'}
-          </label>
-        </div>
-        {uploadResult && (
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <p className="text-sm text-slate-700">
-              <strong className="text-primary">{uploadResult.success}명</strong> 등록됨
-              {uploadResult.fail > 0 && (
-                <> · <strong className="text-red-600">{uploadResult.fail}건</strong> 실패</>
-              )}
-            </p>
-            {uploadResult.errors.length > 0 && (
-              <ul className="mt-2 text-xs text-red-600 max-h-32 overflow-y-auto space-y-0.5">
-                {uploadResult.errors.slice(0, 10).map((msg, i) => (
-                  <li key={i}>{msg}</li>
-                ))}
-                {uploadResult.errors.length > 10 && (
-                  <li>외 {uploadResult.errors.length - 10}건</li>
-                )}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
 
       {(adding || editingId) && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
@@ -304,11 +285,63 @@ export default function MemberList() {
         </div>
       )}
 
+      <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">
+          청년 명단 일괄 등록
+        </summary>
+        <div className="px-4 pb-4">
+          <p className="text-slate-600 text-sm mb-3">
+            엑셀 양식(이름, 전화번호, 생년월일, 새가족, 비고)으로 작성한 파일을 업로드하면 명단이 일괄 등록됩니다.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={downloadMemberTemplate}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              양식 다운로드
+            </button>
+            <label className="rounded-lg border border-primary bg-primary text-white px-3 py-1.5 text-sm cursor-pointer hover:bg-primary-dark">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="sr-only"
+                onChange={handleUpload}
+                disabled={uploading}
+              />
+              {uploading ? '처리 중…' : '파일 선택'}
+            </label>
+          </div>
+          {uploadResult && (
+            <div className="mt-2">
+              <p className="text-sm text-slate-700">
+                등록: {uploadResult.success}건, 실패: {uploadResult.fail}건
+              </p>
+              {uploadResult.errors.length > 0 && (
+                <ul className="mt-1 text-xs text-amber-700 list-disc list-inside">
+                  {uploadResult.errors.slice(0, 5).map((msg, i) => (
+                    <li key={i}>{msg}</li>
+                  ))}
+                  {uploadResult.errors.length > 5 && (
+                    <li>외 {uploadResult.errors.length - 5}건</li>
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+
       {list.length === 0 && !adding ? (
         <p className="text-slate-600">등록된 청년이 없습니다. 「청년 추가」로 등록하세요.</p>
       ) : (
         <ul className="space-y-2">
-          {list.map((m) => (
+          {list.filter((m) => {
+            const matchSearch = m.name.includes(search.trim())
+            const matchNew = !filterNew || m.is_new_member
+            return matchSearch && matchNew
+          }).map((m) => (
             <li
               key={m.id}
               className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-wrap items-center justify-between gap-2"
