@@ -1,11 +1,12 @@
 import * as XLSX from 'xlsx'
 
-const TEMPLATE_HEADERS = ['날짜', '이름'] as const
+const TEMPLATE_HEADERS = ['날짜', '이름', '또래'] as const
 const TEMPLATE_SHEET_NAME = '출석이력'
 
 export type AttendanceRow = {
   date: string
   name: string
+  cohort: string
 }
 
 /** 날짜 값을 YYYY-MM-DD로 정규화 (엑셀 시리얼 또는 문자열) */
@@ -26,11 +27,11 @@ function normalizeDate(v: unknown): string | null {
 export function downloadAttendanceTemplate(): void {
   const wsData: string[][] = [
     [...TEMPLATE_HEADERS],
-    ['2025-01-05', '홍길동'],
-    ['2025-01-12', '김영희'],
+    ['2025-01-05', '홍길동', '99'],
+    ['2025-01-12', '김영희', '00'],
   ]
   const ws = XLSX.utils.aoa_to_sheet(wsData)
-  ws['!cols'] = [{ wch: 12 }, { wch: 14 }]
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 8 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, TEMPLATE_SHEET_NAME)
   XLSX.writeFile(wb, '출석이력_일괄업로드_양식.xlsx')
@@ -69,6 +70,7 @@ export function parseAttendanceFile(
           const dateVal = raw['날짜'] ?? raw['날짜 '] ?? ''
           const date = normalizeDate(dateVal)
           const name = String(raw['이름'] ?? raw['이름 '] ?? '').trim()
+          const cohort = String(raw['또래'] ?? raw['또래 '] ?? '').trim().padStart(2, '0').slice(-2)
           if (!date && !name) continue
           if (!date) {
             errors.push(`${rowNo}행: 날짜가 비어 있거나 형식이 잘못되었습니다. (YYYY-MM-DD)`)
@@ -78,7 +80,7 @@ export function parseAttendanceFile(
             errors.push(`${rowNo}행: 이름이 비어 있습니다.`)
             continue
           }
-          rows.push({ date, name })
+          rows.push({ date, name, cohort })
         }
 
         resolve({ rows, errors })

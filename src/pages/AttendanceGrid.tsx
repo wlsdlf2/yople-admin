@@ -150,17 +150,27 @@ export default function AttendanceGrid() {
         return
       }
       setUploadStatus('uploading')
-      const { data: membersData } = await supabase.from('members').select('id, name')
+      const { data: membersData } = await supabase.from('members').select('id, name, birth_date')
+      // 이름+또래 → id (우선), 이름만 → id (폴백)
+      const nameAndCohortToId = new Map<string, string>()
       const nameToId = new Map<string, string>()
       for (const m of membersData ?? []) {
-        const name = (m as { id: string; name: string }).name?.trim()
-        if (name && !nameToId.has(name)) nameToId.set(name, (m as { id: string }).id)
+        const mm = m as { id: string; name: string; birth_date: string | null }
+        const name = mm.name?.trim()
+        if (!name) continue
+        if (!nameToId.has(name)) nameToId.set(name, mm.id)
+        if (mm.birth_date) {
+          const cohort = String(new Date(mm.birth_date).getFullYear() % 100).padStart(2, '0')
+          const key = `${name}_${cohort}`
+          if (!nameAndCohortToId.has(key)) nameAndCohortToId.set(key, mm.id)
+        }
       }
       let inserted = 0
       let skipped = 0
       let notFound = 0
       for (const row of rows) {
-        const memberId = nameToId.get(row.name)
+        const key = `${row.name}_${row.cohort}`
+        const memberId = (row.cohort ? nameAndCohortToId.get(key) : undefined) ?? nameToId.get(row.name)
         if (!memberId) {
           notFound += 1
           continue
