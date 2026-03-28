@@ -11,6 +11,7 @@ export default function DashboardLayout() {
   const [pendingApproval, setPendingApproval] = useState(false)
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'staff' | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarHovered, setSidebarHovered] = useState(false)
 
   useEffect(() => {
     const check = async () => {
@@ -93,7 +94,12 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Navbar userRole={userRole} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((c) => !c)} />
+      <Navbar
+        userRole={userRole}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((c) => !c)}
+        onHoverChange={setSidebarHovered}
+      />
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -111,7 +117,7 @@ export default function DashboardLayout() {
           </button>
         </header>
         <main className="p-4 sm:p-6 flex-1 overflow-auto">
-          <div className={sidebarCollapsed ? 'w-full' : 'max-w-4xl mx-auto'}>
+          <div className={sidebarCollapsed && !sidebarHovered ? 'w-full' : 'max-w-4xl mx-auto'}>
             <Outlet />
           </div>
         </main>

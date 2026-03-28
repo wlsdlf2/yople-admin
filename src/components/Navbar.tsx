@@ -14,18 +14,30 @@ type NavbarProps = {
   userRole?: 'owner' | 'admin' | 'staff' | null
   collapsed: boolean
   onToggle: () => void
+  onHoverChange: (hovered: boolean) => void
 }
 
-export function Navbar({ userRole, collapsed, onToggle }: NavbarProps) {
+export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarProps) {
   const [hovered, setHovered] = useState(false)
   const canManageApprovals = userRole === 'owner' || userRole === 'admin'
   const isExpanded = !collapsed || hovered
 
+  const handleMouseEnter = () => {
+    if (collapsed) {
+      setHovered(true)
+      onHoverChange(true)
+    }
+  }
+  const handleMouseLeave = () => {
+    setHovered(false)
+    onHoverChange(false)
+  }
+
   return (
     <aside
       className={`flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${isExpanded ? 'w-52' : 'w-10'}`}
-      onMouseEnter={() => collapsed && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* 토글 버튼 */}
       <div className="flex justify-end px-2 pt-2">
