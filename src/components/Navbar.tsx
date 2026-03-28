@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom'
 
 const links = [
-  { to: '/dashboard', end: true, label: '홈' },
   { to: '/dashboard/attendance', end: false, label: '주일별 출석 현황' },
   { to: '/dashboard/members', end: false, label: '청년 명단' },
 ]

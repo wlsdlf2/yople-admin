@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { downloadAttendanceTemplate, parseAttendanceFile } from '../lib/attendanceBulk'
 
 type Member = {
   id: string
@@ -9,25 +10,29 @@ type Member = {
   is_new_member: boolean
 }
 
-/** 해당 월의 주일(일요일) 날짜들 YYYY-MM-DD */
-function getSundaysInMonth(year: number, month: number): string[] {
+type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[] }
+
+/** 해당 연도의 모든 일요일 날짜들 YYYY-MM-DD */
+function getSundaysInYear(year: number): string[] {
   const dates: string[] = []
-  const d = new Date(year, month - 1, 1)
-  while (d.getMonth() === month - 1) {
-    if (d.getDay() === 0) {
-      dates.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))
-    }
-    d.setDate(d.getDate() + 1)
+  const d = new Date(year, 0, 1)
+  while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
+  while (d.getFullYear() === year) {
+    dates.push(
+      d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0')
+    )
+    d.setDate(d.getDate() + 7)
   }
   return dates
 }
 
 function formatDateCol(dateStr: string) {
   const d = new Date(dateStr + 'Z')
-  return d.getMonth() + 1 + '/' + d.getDate()
+  return (d.getMonth() + 1) + '/' + d.getDate()
 }
 
-/** birth_date에서 또래(출생년도 2자리) */
 function getCohort(birth_date: string | null): string {
   if (!birth_date) return '-'
   const y = new Date(birth_date).getFullYear() % 100
@@ -36,22 +41,48 @@ function getCohort(birth_date: string | null): string {
 
 export default function AttendanceGrid() {
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  const currentYear = now.getFullYear()
+
+  const [year, setYear] = useState(currentYear)
+  const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
   const [members, setMembers] = useState<Member[]>([])
   const [attendedSet, setAttendedSet] = useState<Set<string>>(new Set())
+  const [datesWithData, setDatesWithData] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  const dates = getSundaysInMonth(year, month)
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'parsing' | 'uploading' | 'done' | 'error'>('idle')
+  const [uploadMessage, setUploadMessage] = useState('')
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 과거 연도 목록 조회 (최초 1회)
+  useEffect(() => {
+    const fetchYears = async () => {
+      const { data } = await supabase
+        .from('attendances')
+        .select('date')
+      if (data) {
+        const years = new Set<number>()
+        for (const row of data as { date: string }[]) {
+          const y = new Date(row.date + 'Z').getFullYear()
+          if (y < currentYear) years.add(y)
+        }
+        const sorted = [currentYear, ...Array.from(years).sort((a, b) => b - a)]
+        setAvailableYears(sorted)
+      }
+    }
+    fetchYears()
+  }, [currentYear])
+
+  // 선택된 연도의 출석 데이터 조회
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       setError(null)
-      const start = `${year}-${String(month).padStart(2, '0')}-01`
-      const lastDay = new Date(year, month, 0).getDate()
-      const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      const start = `${year}-01-01`
+      const end = `${year}-12-31`
 
       try {
         const { data: memberData, error: errM } = await supabase
@@ -78,12 +109,15 @@ export default function AttendanceGrid() {
           return
         }
 
-        const set = new Set<string>()
+        const attended = new Set<string>()
+        const withData = new Set<string>()
         for (const a of attData ?? []) {
-          set.add(`${a.member_id}_${a.date}`)
+          attended.add(`${a.member_id}_${a.date}`)
+          withData.add(a.date)
         }
         setMembers((memberData ?? []) as Member[])
-        setAttendedSet(set)
+        setAttendedSet(attended)
+        setDatesWithData(withData)
       } catch {
         setError('데이터를 불러오지 못했습니다.')
       } finally {
@@ -91,71 +125,156 @@ export default function AttendanceGrid() {
       }
     }
     fetchData()
-  }, [year, month])
+  }, [year, refreshTrigger])
 
-  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  const dates = getSundaysInYear(year)
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'xlsx' && ext !== 'xls') {
+      setUploadStatus('error')
+      setUploadMessage('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다.')
+      return
+    }
+    setUploadStatus('parsing')
+    setUploadMessage('')
+    setUploadResult(null)
+    try {
+      const { rows, errors: parseErrors } = await parseAttendanceFile(file)
+      if (rows.length === 0 && parseErrors.length === 0) {
+        setUploadStatus('error')
+        setUploadMessage('유효한 출석 행이 없습니다. 양식을 확인해 주세요.')
+        return
+      }
+      setUploadStatus('uploading')
+      const { data: membersData } = await supabase.from('members').select('id, name')
+      const nameToId = new Map<string, string>()
+      for (const m of membersData ?? []) {
+        const name = (m as { id: string; name: string }).name?.trim()
+        if (name && !nameToId.has(name)) nameToId.set(name, (m as { id: string }).id)
+      }
+      let inserted = 0
+      let skipped = 0
+      let notFound = 0
+      for (const row of rows) {
+        const memberId = nameToId.get(row.name)
+        if (!memberId) {
+          notFound += 1
+          continue
+        }
+        const { error: insertErr } = await supabase.from('attendances').insert({
+          member_id: memberId,
+          date: row.date,
+        })
+        if (insertErr) {
+          if (insertErr.code === '23505') skipped += 1
+          else notFound += 1
+        } else {
+          inserted += 1
+        }
+      }
+      setUploadResult({ inserted, skipped, notFound, parseErrors })
+      setUploadStatus('done')
+      setUploadMessage(
+        `반영: ${inserted}건, 이미 있음 제외: ${skipped}건, 명단에 없음: ${notFound}건${parseErrors.length ? `, 파싱 경고 ${parseErrors.length}건` : ''}`
+      )
+      setRefreshTrigger((t) => t + 1)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } catch (err) {
+      setUploadStatus('error')
+      setUploadMessage(err instanceof Error ? err.message : '업로드 처리 중 오류가 났습니다.')
+    }
+  }
 
   if (loading) {
     return <p className="text-slate-500">불러오는 중…</p>
   }
 
   if (error) {
-    return (
-      <div>
-        <p className="text-red-600 bg-red-50 rounded-lg p-3 mb-4">{error}</p>
-        <Link to="/dashboard/attendance" className="text-primary hover:text-primary-dark text-sm">
-          ← 주일별 출석 현황
-        </Link>
-      </div>
-    )
+    return <p className="text-red-600 bg-red-50 rounded-lg p-3">{error}</p>
   }
 
   return (
     <div>
-      <Link
-        to="/dashboard/attendance"
-        className="inline-block text-sm text-slate-500 hover:text-primary mb-4"
-      >
-        ← 주일별 출석 현황
-      </Link>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <h2 className="text-xl font-semibold text-slate-800">출석부 (그리드)</h2>
+        <h2 className="text-xl font-semibold text-slate-800">주일별 출석 현황</h2>
         <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-600">연도</span>
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
           >
-            {[year - 2, year - 1, year, year + 1].map((y) => (
+            {availableYears.map((y) => (
               <option key={y} value={y}>{y}년</option>
-            ))}
-          </select>
-          <select
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
-          >
-            {months.map((m) => (
-              <option key={m} value={m}>{m}월</option>
             ))}
           </select>
         </div>
       </div>
-      <p className="text-slate-600 text-sm mb-4">
-        엑셀 출석부처럼 해당 월의 주일(일요일)별 출석 여부를 표시합니다.
-      </p>
+
+      <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">
+          출석 이력 일괄 업로드
+        </summary>
+        <div className="px-4 pb-4">
+          <p className="text-slate-600 text-sm mb-3">
+            엑셀 양식(날짜, 이름)으로 작성한 파일을 업로드하면 출석 이력이 반영됩니다. 이름은 청년 명단과 정확히 일치해야 합니다.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={downloadAttendanceTemplate}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              양식 다운로드
+            </button>
+            <label className="rounded-lg border border-primary bg-primary text-white px-3 py-1.5 text-sm cursor-pointer hover:bg-primary-dark">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="sr-only"
+                onChange={handleUpload}
+                disabled={uploadStatus === 'parsing' || uploadStatus === 'uploading'}
+              />
+              {uploadStatus === 'parsing' || uploadStatus === 'uploading' ? '처리 중…' : '파일 선택'}
+            </label>
+          </div>
+          {uploadMessage && (
+            <p
+              className={`mt-2 text-sm ${
+                uploadStatus === 'error' ? 'text-red-600' : uploadStatus === 'done' ? 'text-slate-700' : 'text-slate-600'
+              }`}
+            >
+              {uploadMessage}
+            </p>
+          )}
+          {uploadResult && uploadResult.parseErrors.length > 0 && (
+            <ul className="mt-1 text-xs text-amber-700 list-disc list-inside">
+              {uploadResult.parseErrors.slice(0, 5).map((msg, i) => (
+                <li key={i}>{msg}</li>
+              ))}
+              {uploadResult.parseErrors.length > 5 && (
+                <li>외 {uploadResult.parseErrors.length - 5}건</li>
+              )}
+            </ul>
+          )}
+        </div>
+      </details>
 
       {dates.length === 0 ? (
-        <p className="text-slate-600">이 달에는 주일이 없습니다.</p>
+        <p className="text-slate-600">이 해에는 주일이 없습니다.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+          <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="text-left p-2 sticky left-0 bg-slate-50 border-r border-slate-200 min-w-[4rem]">
+                <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[3rem]">
                   또래
                 </th>
-                <th className="text-left p-2 sticky left-0 bg-slate-50 border-r border-slate-200 min-w-[5rem] z-10">
+                <th className="text-left p-2 sticky left-12 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
                   이름
                 </th>
                 {dates.map((d) => (
@@ -176,10 +295,10 @@ export default function AttendanceGrid() {
             <tbody>
               {members.map((m) => (
                 <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                  <td className="p-2 text-slate-500 sticky left-0 bg-white border-r border-slate-100">
+                  <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
                     {getCohort(m.birth_date)}
                   </td>
-                  <td className="p-2 font-medium text-slate-800 sticky left-0 bg-white border-r border-slate-100">
+                  <td className="p-2 font-medium text-slate-800 sticky left-12 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
                     {m.is_new_member && (
                       <span className="text-amber-600 text-xs mr-1">N</span>
                     )}
@@ -187,7 +306,9 @@ export default function AttendanceGrid() {
                   </td>
                   {dates.map((d) => (
                     <td key={d} className="p-1 text-center">
-                      {attendedSet.has(`${m.id}_${d}`) ? (
+                      {!datesWithData.has(d) ? (
+                        <span className="text-slate-200">·</span>
+                      ) : attendedSet.has(`${m.id}_${d}`) ? (
                         <span className="text-primary font-medium">O</span>
                       ) : (
                         <span className="text-slate-300">-</span>
