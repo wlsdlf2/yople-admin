@@ -10,7 +10,7 @@ type Member = {
   is_new_member: boolean
 }
 
-type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[] }
+type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[]; duplicateErrors: string[] }
 
 /** 해당 연도의 모든 일요일 날짜들 YYYY-MM-DD */
 function getSundaysInYear(year: number): string[] {
@@ -151,14 +151,18 @@ export default function AttendanceGrid() {
       }
       setUploadStatus('uploading')
       const { data: membersData } = await supabase.from('members').select('id, name, birth_date')
-      // 이름+또래 → id (우선), 이름만 → id (폴백)
       const nameAndCohortToId = new Map<string, string>()
       const nameToId = new Map<string, string>()
+      const duplicateNames = new Set<string>() // 동명이인 이름 집합
       for (const m of membersData ?? []) {
         const mm = m as { id: string; name: string; birth_date: string | null }
         const name = mm.name?.trim()
         if (!name) continue
-        if (!nameToId.has(name)) nameToId.set(name, mm.id)
+        if (nameToId.has(name)) {
+          duplicateNames.add(name)
+        } else {
+          nameToId.set(name, mm.id)
+        }
         if (mm.birth_date) {
           const cohort = String(new Date(mm.birth_date).getFullYear() % 100).padStart(2, '0')
           const key = `${name}_${cohort}`
@@ -168,7 +172,13 @@ export default function AttendanceGrid() {
       let inserted = 0
       let skipped = 0
       let notFound = 0
+      const duplicateErrors: string[] = []
       for (const row of rows) {
+        // 또래 없이 동명이인인 경우 → 등록 불가
+        if (!row.cohort && duplicateNames.has(row.name)) {
+          duplicateErrors.push(`${row.date} ${row.name}: 동명이인이 있어 또래 없이는 등록할 수 없습니다.`)
+          continue
+        }
         const key = `${row.name}_${row.cohort}`
         const memberId = (row.cohort ? nameAndCohortToId.get(key) : undefined) ?? nameToId.get(row.name)
         if (!memberId) {
@@ -186,10 +196,10 @@ export default function AttendanceGrid() {
           inserted += 1
         }
       }
-      setUploadResult({ inserted, skipped, notFound, parseErrors })
+      setUploadResult({ inserted, skipped, notFound, parseErrors, duplicateErrors })
       setUploadStatus('done')
       setUploadMessage(
-        `반영: ${inserted}건, 이미 있음 제외: ${skipped}건, 명단에 없음: ${notFound}건${parseErrors.length ? `, 파싱 경고 ${parseErrors.length}건` : ''}`
+        `반영: ${inserted}건, 이미 있음 제외: ${skipped}건, 명단에 없음: ${notFound}건${duplicateErrors.length ? `, 동명이인 미등록: ${duplicateErrors.length}건` : ''}${parseErrors.length ? `, 파싱 경고 ${parseErrors.length}건` : ''}`
       )
       setRefreshTrigger((t) => t + 1)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -278,6 +288,19 @@ export default function AttendanceGrid() {
             >
               {uploadMessage}
             </p>
+          )}
+          {uploadResult && uploadResult.duplicateErrors.length > 0 && (
+            <div className="mt-1">
+              <p className="text-xs font-medium text-red-600 mb-0.5">동명이인 미등록 — 또래를 추가해 주세요</p>
+              <ul className="text-xs text-red-600 list-disc list-inside">
+                {uploadResult.duplicateErrors.slice(0, 5).map((msg, i) => (
+                  <li key={i}>{msg}</li>
+                ))}
+                {uploadResult.duplicateErrors.length > 5 && (
+                  <li>외 {uploadResult.duplicateErrors.length - 5}건</li>
+                )}
+              </ul>
+            </div>
           )}
           {uploadResult && uploadResult.parseErrors.length > 0 && (
             <ul className="mt-1 text-xs text-amber-700 list-disc list-inside">
