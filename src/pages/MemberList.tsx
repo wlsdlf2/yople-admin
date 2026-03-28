@@ -106,6 +106,17 @@ export default function MemberList() {
     }
   }
 
+  const graduate = async (id: string, name: string) => {
+    if (!confirm(`"${name}" 청년을 등반 처리할까요?\n새가족 탭에서 제외되고 전체 탭으로 이동합니다.`)) return
+    const { error: err } = await supabase.from('members').update({ is_new_member: false }).eq('id', id)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setError(null)
+    load()
+  }
+
   const remove = async (id: string, name: string) => {
     if (!confirm(`"${name}" 청년을 명단에서 삭제할까요?`)) return
     const { error: err } = await supabase.from('members').delete().eq('id', id)
@@ -263,6 +274,15 @@ export default function MemberList() {
                 )}
               </div>
               <div className="flex gap-2">
+                {m.is_new_member && (
+                  <button
+                    type="button"
+                    onClick={() => graduate(m.id, m.name)}
+                    className="text-sm text-emerald-600 hover:text-emerald-700"
+                  >
+                    등반
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => openEdit(m)}
