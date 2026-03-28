@@ -293,6 +293,21 @@ export default function AttendanceGrid() {
               </tr>
             </thead>
             <tbody>
+              <tr className="border-b border-slate-200 bg-slate-50/80">
+                <td className="p-2 sticky left-0 z-10 bg-slate-50/80 border-r border-slate-200" />
+                <td className="p-2 text-xs font-semibold text-slate-500 sticky left-12 z-10 bg-slate-50/80 border-r border-slate-200 whitespace-nowrap">
+                  총 출석
+                </td>
+                {dates.map((d) => (
+                  <td key={d} className="p-1 text-center">
+                    {datesWithData.has(d) ? (
+                      <span className="text-xs font-semibold text-slate-600">
+                        {members.filter((m) => attendedSet.has(`${m.id}_${d}`)).length}
+                      </span>
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
               {members.map((m) => (
                 <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
