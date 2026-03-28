@@ -1,6 +1,5 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { downloadMemberTemplate, parseMemberFile } from '../lib/memberBulk'
 
 type Member = {
   id: string
@@ -29,9 +28,6 @@ export default function MemberList() {
   const [form, setForm] = useState(emptyForm)
   const [search, setSearch] = useState('')
   const [filterNew, setFilterNew] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<{ success: number; fail: number; errors: string[] } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -107,50 +103,6 @@ export default function MemberList() {
       }
       cancelForm()
       load()
-    }
-  }
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
-    if (ext !== '.xlsx' && ext !== '.xls') {
-      setError('엑셀 파일(.xlsx, .xls)만 업로드할 수 있습니다.')
-      e.target.value = ''
-      return
-    }
-    setUploading(true)
-    setUploadResult(null)
-    setError(null)
-    try {
-      const { rows, errors: parseErrors } = await parseMemberFile(file)
-      const errors = [...parseErrors]
-      let success = 0
-      let fail = 0
-      for (const row of rows) {
-        const payload = {
-          name: row.name.trim(),
-          phone: row.phone.trim(),
-          birth_date: row.birth_date || null,
-          is_new_member: Boolean(row.is_new_member),
-          memo: row.memo?.trim() || null,
-        }
-        const { error: err } = await supabase.from('members').insert(payload)
-        if (err) {
-          fail += 1
-          if (err.code === '23505') errors.push(`전화번호 중복: ${row.name}(${row.phone})`)
-          else errors.push(`${row.name}: ${err.message}`)
-        } else {
-          success += 1
-        }
-      }
-      setUploadResult({ success, fail, errors })
-      if (success > 0) load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '업로드 처리 중 오류가 발생했습니다.')
-    } finally {
-      setUploading(false)
-      e.target.value = ''
     }
   }
 
@@ -284,54 +236,6 @@ export default function MemberList() {
           </div>
         </div>
       )}
-
-      <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">
-          청년 명단 일괄 등록
-        </summary>
-        <div className="px-4 pb-4">
-          <p className="text-slate-600 text-sm mb-3">
-            엑셀 양식(이름, 전화번호, 생년월일, 새가족, 비고)으로 작성한 파일을 업로드하면 명단이 일괄 등록됩니다.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={downloadMemberTemplate}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              양식 다운로드
-            </button>
-            <label className="rounded-lg border border-primary bg-primary text-white px-3 py-1.5 text-sm cursor-pointer hover:bg-primary-dark">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                className="sr-only"
-                onChange={handleUpload}
-                disabled={uploading}
-              />
-              {uploading ? '처리 중…' : '파일 선택'}
-            </label>
-          </div>
-          {uploadResult && (
-            <div className="mt-2">
-              <p className="text-sm text-slate-700">
-                등록: {uploadResult.success}건, 실패: {uploadResult.fail}건
-              </p>
-              {uploadResult.errors.length > 0 && (
-                <ul className="mt-1 text-xs text-amber-700 list-disc list-inside">
-                  {uploadResult.errors.slice(0, 5).map((msg, i) => (
-                    <li key={i}>{msg}</li>
-                  ))}
-                  {uploadResult.errors.length > 5 && (
-                    <li>외 {uploadResult.errors.length - 5}건</li>
-                  )}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-      </details>
 
       {list.length === 0 && !adding ? (
         <p className="text-slate-600">등록된 청년이 없습니다. 「청년 추가」로 등록하세요.</p>

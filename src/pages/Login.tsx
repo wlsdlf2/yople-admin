@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase'
 
 export default function Login() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => localStorage.getItem('savedEmail') ?? '')
   const [password, setPassword] = useState('')
+  const [rememberEmail, setRememberEmail] = useState(() => !!localStorage.getItem('savedEmail'))
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -18,6 +19,11 @@ export default function Login() {
       if (err) {
         setError(err.message === 'Invalid login credentials' ? '이메일 또는 비밀번호를 확인해 주세요.' : err.message)
         return
+      }
+      if (rememberEmail) {
+        localStorage.setItem('savedEmail', email)
+      } else {
+        localStorage.removeItem('savedEmail')
       }
       navigate('/dashboard', { replace: true })
     } catch {
@@ -60,6 +66,15 @@ export default function Login() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberEmail}
+              onChange={(e) => setRememberEmail(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            아이디 저장
+          </label>
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg py-2 px-3">{error}</p>
           )}
