@@ -321,14 +321,14 @@ export default function AttendanceGrid() {
                     {datesWithData.has(d) ? (
                       <span className="text-xs font-semibold text-slate-600">
                         {members
-                          .filter((m) => tab === 'all' || m.is_new_member)
+                          .filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member)
                           .filter((m) => attendedSet.has(`${m.id}_${d}`)).length}
                       </span>
                     ) : null}
                   </td>
                 ))}
               </tr>
-              {members.filter((m) => tab === 'all' || m.is_new_member).map((m) => (
+              {members.filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member).map((m) => (
                 <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
                     {getCohort(m.birth_date)}
