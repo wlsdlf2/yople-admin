@@ -51,6 +51,7 @@ export default function AttendanceGrid() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [tab, setTab] = useState<'all' | 'new'>('all')
 
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'parsing' | 'uploading' | 'done' | 'error'>('idle')
   const [uploadMessage, setUploadMessage] = useState('')
@@ -214,6 +215,23 @@ export default function AttendanceGrid() {
         </div>
       </div>
 
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
+        {(['all', 'new'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t
+                ? 'border-primary text-primary'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t === 'all' ? '전체' : '새가족'}
+          </button>
+        ))}
+      </div>
+
       <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">
           출석 이력 일괄 업로드
@@ -302,13 +320,15 @@ export default function AttendanceGrid() {
                   <td key={d} className="p-1 text-center">
                     {datesWithData.has(d) ? (
                       <span className="text-xs font-semibold text-slate-600">
-                        {members.filter((m) => attendedSet.has(`${m.id}_${d}`)).length}
+                        {members
+                          .filter((m) => tab === 'all' || m.is_new_member)
+                          .filter((m) => attendedSet.has(`${m.id}_${d}`)).length}
                       </span>
                     ) : null}
                   </td>
                 ))}
               </tr>
-              {members.map((m) => (
+              {members.filter((m) => tab === 'all' || m.is_new_member).map((m) => (
                 <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
                     {getCohort(m.birth_date)}
