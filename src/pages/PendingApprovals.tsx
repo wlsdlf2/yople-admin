@@ -11,11 +11,20 @@ type PendingUser = {
   created_at: string
 }
 
+type Role = 'staff' | 'admin' | 'owner'
+
+const roleLabels: Record<Role, string> = {
+  staff: '스태프',
+  admin: '관리자',
+  owner: '오너',
+}
+
 export default function PendingApprovals() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
   const [list, setList] = useState<PendingUser[]>([])
+  const [selectedRoles, setSelectedRoles] = useState<Record<string, Role>>({})
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -53,7 +62,11 @@ export default function PendingApprovals() {
 
   const approve = async (id: string) => {
     setError(null)
-    const { error: err } = await supabase.from('users').update({ approved: true }).eq('id', id)
+    const role = selectedRoles[id] ?? 'staff'
+    const { error: err } = await supabase
+      .from('users')
+      .update({ approved: true, role })
+      .eq('id', id)
     if (err) {
       setError(err.message)
       return
@@ -95,13 +108,28 @@ export default function PendingApprovals() {
                   요청일: {new Date(u.created_at).toLocaleDateString('ko-KR')}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => approve(u.id)}
-                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark"
-              >
-                수락
-              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedRoles[u.id] ?? 'staff'}
+                  onChange={(e) =>
+                    setSelectedRoles((prev) => ({ ...prev, [u.id]: e.target.value as Role }))
+                  }
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {(Object.keys(roleLabels) as Role[]).map((r) => (
+                    <option key={r} value={r}>
+                      {roleLabels[r]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => approve(u.id)}
+                  className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark"
+                >
+                  수락
+                </button>
+              </div>
             </li>
           ))}
         </ul>
