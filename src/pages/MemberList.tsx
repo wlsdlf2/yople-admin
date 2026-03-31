@@ -3,16 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadMemberTemplate, parseMemberFile } from '../lib/memberBulk'
 
-function getAge(birth_date: string): number {
-  const today = new Date()
-  const birth = new Date(birth_date + 'T00:00:00')
-  let age = today.getFullYear() - birth.getFullYear()
-  const hasBirthdayPassed =
-    today.getMonth() > birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate())
-  if (!hasBirthdayPassed) age -= 1
-  return age
-}
 
 function formatBirthday(birth_date: string): string {
   const d = new Date(birth_date + 'T00:00:00')
@@ -438,15 +428,15 @@ export default function MemberList() {
           }).map((m) => (
             <li
               key={m.id}
-              className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-wrap items-center justify-between gap-2"
+              className="relative bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-wrap items-center justify-between gap-2"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={`/dashboard/members/${m.id}`}
-                  className="font-medium text-slate-800 hover:text-primary"
-                >
-                  {m.name}
-                </Link>
+              <Link
+                to={`/dashboard/members/${m.id}`}
+                className="absolute inset-0 rounded-xl"
+                aria-label={m.name}
+              />
+              <div className="relative flex flex-wrap items-center gap-2 pointer-events-none">
+                <span className="font-medium text-slate-800">{m.name}</span>
                 {m.is_new_member && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                     새가족
@@ -457,7 +447,7 @@ export default function MemberList() {
                   <span className="text-slate-400 text-sm">{m.birth_date}</span>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="relative z-10 flex gap-2">
                 {m.is_new_member && (
                   <button
                     type="button"
