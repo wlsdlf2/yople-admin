@@ -460,14 +460,14 @@ export default function MemberList() {
                 <button
                   type="button"
                   onClick={() => openEdit(m)}
-                  className="text-sm text-primary hover:text-primary-dark"
+                  className="cursor-pointer text-sm text-primary hover:text-primary-dark"
                 >
                   수정
                 </button>
                 <button
                   type="button"
                   onClick={() => remove(m.id, m.name)}
-                  className="text-sm text-red-600 hover:text-red-700"
+                  className="cursor-pointer text-sm text-red-600 hover:text-red-700"
                 >
                   삭제
                 </button>
