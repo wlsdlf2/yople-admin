@@ -227,9 +227,18 @@ export default function AttendanceDetail() {
                 key={a.id}
                 className="px-4 py-3 flex flex-wrap items-center justify-between gap-2"
               >
-                <span className="font-medium text-slate-800">
-                  {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
-                </span>
+                {a.member_id ? (
+                  <Link
+                    to={`/dashboard/members/${a.member_id}`}
+                    className="font-medium text-slate-800 hover:text-primary"
+                  >
+                    {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-slate-800">
+                    {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
+                  </span>
+                )}
                 <div className="flex items-center gap-2">
                   {editingId === a.id ? (
                     <>
@@ -291,7 +300,12 @@ export default function AttendanceDetail() {
           <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
             {absentMembers.map((m) => (
               <li key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
-                <span className="text-slate-700">{m.name}</span>
+                <Link
+                  to={`/dashboard/members/${m.id}`}
+                  className="text-slate-700 hover:text-primary"
+                >
+                  {m.name}
+                </Link>
                 <button
                   type="button"
                   onClick={() => {

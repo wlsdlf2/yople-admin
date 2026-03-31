@@ -367,10 +367,15 @@ export default function AttendanceGrid() {
                     {getCohort(m.birth_date)}
                   </td>
                   <td className="p-2 font-medium text-slate-800 sticky left-12 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
-                    {m.is_new_member && (
-                      <span className="text-amber-600 text-xs mr-1">N</span>
-                    )}
-                    {m.name}
+                    <Link
+                      to={`/dashboard/members/${m.id}`}
+                      className="block hover:text-primary"
+                    >
+                      {m.is_new_member && (
+                        <span className="text-amber-600 text-xs mr-1">N</span>
+                      )}
+                      {m.name}
+                    </Link>
                   </td>
                   {dates.map((d) => (
                     <td key={d} className="p-1 text-center">

@@ -198,35 +198,67 @@ export default function MemberList() {
     return <p className="text-slate-500">불러오는 중…</p>
   }
 
-  const currentMonth = new Date().getMonth() + 1
-  const birthdayMembers = list
-    .filter((m) => {
-      if (!m.birth_date) return false
-      return new Date(m.birth_date + 'T00:00:00').getMonth() + 1 === currentMonth
-    })
-    .sort((a, b) => {
-      const da = new Date(a.birth_date! + 'T00:00:00').getDate()
-      const db = new Date(b.birth_date! + 'T00:00:00').getDate()
-      return da - db
-    })
+  const today = new Date()
+  const thisSunday = new Date(today)
+  thisSunday.setDate(today.getDate() - today.getDay())
+  const thisSaturday = new Date(thisSunday)
+  thisSaturday.setDate(thisSunday.getDate() + 6)
+  const nextSunday = new Date(thisSunday)
+  nextSunday.setDate(thisSunday.getDate() + 7)
+  const nextSaturday = new Date(nextSunday)
+  nextSaturday.setDate(nextSunday.getDate() + 6)
+
+  function inWeek(birth_date: string, start: Date, end: Date): boolean {
+    const birth = new Date(birth_date + 'T00:00:00')
+    const bMonth = birth.getMonth()
+    const bDay = birth.getDate()
+    const current = new Date(start)
+    while (current <= end) {
+      if (current.getMonth() === bMonth && current.getDate() === bDay) return true
+      current.setDate(current.getDate() + 1)
+    }
+    return false
+  }
+
+  const thisWeekBirthdays = list
+    .filter((m) => m.birth_date && inWeek(m.birth_date, thisSunday, thisSaturday))
+    .sort((a, b) => new Date(a.birth_date! + 'T00:00:00').getDate() - new Date(b.birth_date! + 'T00:00:00').getDate())
+  const nextWeekBirthdays = list
+    .filter((m) => m.birth_date && inWeek(m.birth_date, nextSunday, nextSaturday))
+    .sort((a, b) => new Date(a.birth_date! + 'T00:00:00').getDate() - new Date(b.birth_date! + 'T00:00:00').getDate())
 
   return (
     <div>
-      {birthdayMembers.length > 0 && (
-        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h3 className="text-sm font-semibold text-amber-800 mb-3">
-            이번 달 생일 ({birthdayMembers.length}명)
-          </h3>
-          <ul className="flex flex-wrap gap-2">
-            {birthdayMembers.map((m) => (
-              <li
-                key={m.id}
-                className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700"
-              >
-                {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
-              </li>
-            ))}
-          </ul>
+      {(thisWeekBirthdays.length > 0 || nextWeekBirthdays.length > 0) && (
+        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          {thisWeekBirthdays.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800 mb-2">
+                이번 주 생일 ({thisWeekBirthdays.length}명)
+              </h3>
+              <ul className="flex flex-wrap gap-2">
+                {thisWeekBirthdays.map((m) => (
+                  <li key={m.id} className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700">
+                    {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {nextWeekBirthdays.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-amber-700 mb-2">
+                다음 주 생일 ({nextWeekBirthdays.length}명)
+              </h3>
+              <ul className="flex flex-wrap gap-2">
+                {nextWeekBirthdays.map((m) => (
+                  <li key={m.id} className="rounded-lg bg-white border border-amber-100 px-3 py-1.5 text-sm text-slate-600">
+                    {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 
