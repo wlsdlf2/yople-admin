@@ -88,7 +88,7 @@ export default function MemberDetail() {
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="text-sm text-primary hover:text-primary-dark mb-4 inline-flex items-center gap-1"
+        className="cursor-pointer text-sm text-primary hover:text-primary-dark mb-4 inline-flex items-center gap-1"
       >
         ← 뒤로가기
       </button>
