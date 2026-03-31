@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom'
 const links = [
   { to: '/dashboard/attendance', end: false, label: '주일별 출석 현황' },
   { to: '/dashboard/members', end: false, label: '청년 명단' },
+  { to: '/dashboard/absent', end: false, label: '결석자 조회' },
 ]
 
 const adminOnlyLinks = [
