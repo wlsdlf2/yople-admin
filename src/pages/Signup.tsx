@@ -31,11 +31,24 @@ export default function Signup() {
         setError(signUpError.message)
         return
       }
-      const user = data.user
+
+      let user = data.user
+
+      // 이미 존재하는 계정 (거절 후 재가입): signIn으로 fallback
+      if (user?.identities?.length === 0) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInError) {
+          setError('이미 가입된 이메일입니다. 비밀번호를 확인해 주세요.')
+          return
+        }
+        user = signInData.user
+      }
+
       if (!user) {
         setError('회원가입 중 오류가 발생했습니다.')
         return
       }
+
       const { error: insertError } = await supabase.from('users').insert({
         id: user.id,
         email,

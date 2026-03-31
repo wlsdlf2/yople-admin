@@ -74,6 +74,16 @@ export default function PendingApprovals() {
     setList((prev) => prev.filter((u) => u.id !== id))
   }
 
+  const reject = async (id: string) => {
+    setError(null)
+    const { error: err } = await supabase.from('users').delete().eq('id', id)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setList((prev) => prev.filter((u) => u.id !== id))
+  }
+
   if (loading) {
     return <p className="text-slate-500">불러오는 중…</p>
   }
@@ -122,6 +132,13 @@ export default function PendingApprovals() {
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => reject(u.id)}
+                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
+                >
+                  거절
+                </button>
                 <button
                   type="button"
                   onClick={() => approve(u.id)}
