@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import DashboardLayout from './pages/DashboardLayout'
 import AttendanceGrid from './pages/AttendanceGrid'
 import AttendanceDetail from './pages/AttendanceDetail'
@@ -13,6 +14,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Navigate to="attendance" replace />} />
           <Route path="attendance" element={<AttendanceGrid />} />

@@ -86,9 +86,10 @@ export default function Login() {
             {loading ? '로그인 중…' : '로그인'}
           </button>
         </form>
-        <p className="mt-4 text-center">
-          <Link to="/" className="text-sm text-primary hover:text-primary-dark">
-            홈으로
+        <p className="mt-4 text-center text-sm text-slate-500">
+          계정이 없으신가요?{' '}
+          <Link to="/signup" className="text-primary hover:text-primary-dark">
+            회원가입
           </Link>
         </p>
       </div>
