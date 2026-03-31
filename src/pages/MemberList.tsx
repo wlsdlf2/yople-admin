@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadMemberTemplate, parseMemberFile } from '../lib/memberBulk'
+
+function getAge(birth_date: string): number {
+  const today = new Date()
+  const birth = new Date(birth_date + 'T00:00:00')
+  let age = today.getFullYear() - birth.getFullYear()
+  const hasBirthdayPassed =
+    today.getMonth() > birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate())
+  if (!hasBirthdayPassed) age -= 1
+  return age
+}
+
+function formatBirthday(birth_date: string): string {
+  const d = new Date(birth_date + 'T00:00:00')
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+}
 
 type Member = {
   id: string
@@ -181,8 +198,38 @@ export default function MemberList() {
     return <p className="text-slate-500">불러오는 중…</p>
   }
 
+  const currentMonth = new Date().getMonth() + 1
+  const birthdayMembers = list
+    .filter((m) => {
+      if (!m.birth_date) return false
+      return new Date(m.birth_date + 'T00:00:00').getMonth() + 1 === currentMonth
+    })
+    .sort((a, b) => {
+      const da = new Date(a.birth_date! + 'T00:00:00').getDate()
+      const db = new Date(b.birth_date! + 'T00:00:00').getDate()
+      return da - db
+    })
+
   return (
     <div>
+      {birthdayMembers.length > 0 && (
+        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="text-sm font-semibold text-amber-800 mb-3">
+            이번 달 생일 ({birthdayMembers.length}명)
+          </h3>
+          <ul className="flex flex-wrap gap-2">
+            {birthdayMembers.map((m) => (
+              <li
+                key={m.id}
+                className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700"
+              >
+                {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 className="text-xl font-semibold text-slate-800">청년 명단</h2>
         {!adding && !editingId && (
@@ -360,7 +407,12 @@ export default function MemberList() {
               className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-wrap items-center justify-between gap-2"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-800">{m.name}</span>
+                <Link
+                  to={`/dashboard/members/${m.id}`}
+                  className="font-medium text-slate-800 hover:text-primary"
+                >
+                  {m.name}
+                </Link>
                 {m.is_new_member && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                     새가족
