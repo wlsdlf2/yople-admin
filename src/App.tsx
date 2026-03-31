@@ -6,6 +6,8 @@ import DashboardLayout from './pages/DashboardLayout'
 import AttendanceGrid from './pages/AttendanceGrid'
 import AttendanceDetail from './pages/AttendanceDetail'
 import MemberList from './pages/MemberList'
+import MemberDetail from './pages/MemberDetail'
+import AbsentMembers from './pages/AbsentMembers'
 import PendingApprovals from './pages/PendingApprovals'
 
 function App() {
@@ -20,6 +22,8 @@ function App() {
           <Route path="attendance" element={<AttendanceGrid />} />
           <Route path="attendance/:date" element={<AttendanceDetail />} />
           <Route path="members" element={<MemberList />} />
+          <Route path="members/:id" element={<MemberDetail />} />
+          <Route path="absent" element={<AbsentMembers />} />
           <Route path="approvals" element={<PendingApprovals />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
