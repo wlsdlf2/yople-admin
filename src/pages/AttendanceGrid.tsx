@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadAttendanceTemplate, parseAttendanceFile } from '../lib/attendanceBulk'
+import { getCohort, getSundaysInYear } from '../lib/dateUtils'
 
 type Member = {
   id: string
@@ -12,31 +13,9 @@ type Member = {
 
 type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[]; duplicateErrors: string[] }
 
-/** 해당 연도의 모든 일요일 날짜들 YYYY-MM-DD */
-function getSundaysInYear(year: number): string[] {
-  const dates: string[] = []
-  const d = new Date(year, 0, 1)
-  while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
-  while (d.getFullYear() === year) {
-    dates.push(
-      d.getFullYear() + '-' +
-      String(d.getMonth() + 1).padStart(2, '0') + '-' +
-      String(d.getDate()).padStart(2, '0')
-    )
-    d.setDate(d.getDate() + 7)
-  }
-  return dates
-}
-
 function formatDateCol(dateStr: string) {
   const d = new Date(dateStr + 'Z')
   return (d.getMonth() + 1) + '/' + d.getDate()
-}
-
-function getCohort(birth_date: string | null): string {
-  if (!birth_date) return '-'
-  const y = new Date(birth_date).getFullYear() % 100
-  return String(y).padStart(2, '0')
 }
 
 export default function AttendanceGrid() {
