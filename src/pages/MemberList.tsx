@@ -240,7 +240,7 @@ export default function MemberList() {
             <ul className="flex flex-wrap gap-2">
               {thisWeekBirthdays.map((m) => (
                 <li key={m.id} className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700">
-                  {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                  {m.name} · {formatBirthday(m.birth_date!)}
                 </li>
               ))}
             </ul>
@@ -256,7 +256,7 @@ export default function MemberList() {
             <ul className="flex flex-wrap gap-2">
               {nextWeekBirthdays.map((m) => (
                 <li key={m.id} className="rounded-lg bg-white border border-amber-100 px-3 py-1.5 text-sm text-slate-600">
-                  {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                  {m.name} · {formatBirthday(m.birth_date!)}
                 </li>
               ))}
             </ul>
