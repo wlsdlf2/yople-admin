@@ -229,38 +229,40 @@ export default function MemberList() {
 
   return (
     <div>
-      {(thisWeekBirthdays.length > 0 || nextWeekBirthdays.length > 0) && (
-        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-          {thisWeekBirthdays.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-amber-800 mb-2">
-                이번 주 생일 ({thisWeekBirthdays.length}명)
-              </h3>
-              <ul className="flex flex-wrap gap-2">
-                {thisWeekBirthdays.map((m) => (
-                  <li key={m.id} className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700">
-                    {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
-                  </li>
-                ))}
-              </ul>
-            </div>
+      <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-amber-800 mb-2">
+            이번 주 생일 ({thisWeekBirthdays.length}명)
+          </h3>
+          {thisWeekBirthdays.length === 0 ? (
+            <p className="text-sm text-amber-700/60">이번 주 생일자가 없습니다.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {thisWeekBirthdays.map((m) => (
+                <li key={m.id} className="rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-sm text-slate-700">
+                  {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                </li>
+              ))}
+            </ul>
           )}
-          {nextWeekBirthdays.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-amber-700 mb-2">
-                다음 주 생일 ({nextWeekBirthdays.length}명)
-              </h3>
-              <ul className="flex flex-wrap gap-2">
-                {nextWeekBirthdays.map((m) => (
-                  <li key={m.id} className="rounded-lg bg-white border border-amber-100 px-3 py-1.5 text-sm text-slate-600">
-                    {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
-                  </li>
-                ))}
-              </ul>
-            </div>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-amber-700 mb-2">
+            다음 주 생일 ({nextWeekBirthdays.length}명)
+          </h3>
+          {nextWeekBirthdays.length === 0 ? (
+            <p className="text-sm text-amber-700/60">다음 주 생일자가 없습니다.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {nextWeekBirthdays.map((m) => (
+                <li key={m.id} className="rounded-lg bg-white border border-amber-100 px-3 py-1.5 text-sm text-slate-600">
+                  {m.name} · {formatBirthday(m.birth_date!)} · 만 {getAge(m.birth_date!)}세
+                </li>
+              ))}
+            </ul>
           )}
-        </section>
-      )}
+        </div>
+      </section>
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 className="text-xl font-semibold text-slate-800">청년 명단</h2>
