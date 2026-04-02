@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -23,6 +23,11 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function getCohort(birth_date: string | null | undefined): string {
+  if (!birth_date) return '?'
+  return birth_date.substring(2, 4) // "1999-01-01" → "99"
+}
+
 export default function AttendanceDetail() {
   const { date } = useParams<{ date: string }>()
   const [loading, setLoading] = useState(true)
@@ -31,12 +36,13 @@ export default function AttendanceDetail() {
   const [visitorCount, setVisitorCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const [addMemberId, setAddMemberId] = useState('')
+  const [nameInput, setNameInput] = useState('')
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTime, setEditTime] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
     if (!date) return
@@ -84,13 +90,22 @@ export default function AttendanceDetail() {
   const attendedMemberIds = new Set(attendances.map((a) => a.member_id).filter(Boolean))
   const absentMembers = members.filter((m) => !attendedMemberIds.has(m.id))
 
-  const handleAdd = async () => {
-    if (!date || !addMemberId) return
+  const trimmed = nameInput.trim()
+  const nameMatches = trimmed ? absentMembers.filter((m) => m.name.includes(trimmed)) : []
+
+  // 결석 목록에서 동명이인 여부 확인
+  const absentNameCount = absentMembers.reduce<Record<string, number>>((acc, m) => {
+    acc[m.name] = (acc[m.name] ?? 0) + 1
+    return acc
+  }, {})
+
+  const handleAddById = async (memberId: string) => {
+    if (!date || !memberId) return
     setAddLoading(true)
     setAddError(null)
     try {
       const { error: insertErr } = await supabase.from('attendances').insert({
-        member_id: addMemberId,
+        member_id: memberId,
         date,
       })
       if (insertErr) {
@@ -99,12 +114,19 @@ export default function AttendanceDetail() {
         setAddLoading(false)
         return
       }
-      setAddMemberId('')
+      setNameInput('')
       setRefreshTrigger((t) => t + 1)
+      nameInputRef.current?.focus()
     } catch {
       setAddError('추가에 실패했습니다.')
     } finally {
       setAddLoading(false)
+    }
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && nameMatches.length === 1) {
+      handleAddById(nameMatches[0].id)
     }
   }
 
@@ -192,30 +214,55 @@ export default function AttendanceDetail() {
       <section className="mb-6">
         <h3 className="text-sm font-medium text-slate-600 mb-2">출석 청년 ({attendances.length}명)</h3>
 
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <select
-            value={addMemberId}
-            onChange={(e) => setAddMemberId(e.target.value)}
-            className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm min-w-[140px]"
-          >
-            <option value="">청년 선택</option>
-            {members
-              .filter((m) => !attendedMemberIds.has(m.id))
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={!addMemberId || addLoading}
-            className="cursor-pointer rounded-lg bg-primary text-white px-3 py-1.5 text-sm hover:bg-primary-dark disabled:opacity-50"
-          >
-            {addLoading ? '추가 중…' : '출석 추가'}
-          </button>
-          {addError && <span className="text-sm text-red-600">{addError}</span>}
+        {/* 이름 검색 출석 추가 */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={nameInput}
+              onChange={(e) => { setNameInput(e.target.value); setAddError(null) }}
+              onKeyDown={handleNameKeyDown}
+              placeholder="이름 입력 후 Enter"
+              disabled={addLoading}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+            />
+            {addLoading && <span className="text-xs text-slate-400">추가 중…</span>}
+          </div>
+
+          {trimmed && (
+            <div className="mt-1.5 rounded-lg border border-slate-200 bg-white overflow-hidden w-64">
+              {nameMatches.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-slate-400">검색 결과가 없습니다</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {nameMatches.map((m) => {
+                    const hasDuplicate = (absentNameCount[m.name] ?? 0) > 1
+                    return (
+                      <li key={m.id} className="flex items-center justify-between px-3 py-2 gap-2">
+                        <span className="text-sm text-slate-700">
+                          {m.name}
+                          {hasDuplicate && (
+                            <span className="ml-1 text-xs text-slate-400">({getCohort(m.birth_date)}년생)</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddById(m.id)}
+                          disabled={addLoading}
+                          className="cursor-pointer text-xs text-primary hover:text-primary-dark disabled:opacity-50 flex-shrink-0"
+                        >
+                          추가
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {addError && <p className="mt-1.5 text-xs text-red-600">{addError}</p>}
         </div>
 
         {attendances.length === 0 ? (
@@ -305,14 +352,15 @@ export default function AttendanceDetail() {
                   className="cursor-pointer text-slate-700 hover:text-primary"
                 >
                   {m.name}
+                  {(absentNameCount[m.name] ?? 0) > 1 && (
+                    <span className="ml-1 text-xs text-slate-400">({getCohort(m.birth_date)}년생)</span>
+                  )}
                 </Link>
                 <button
                   type="button"
-                  onClick={() => {
-                    setAddMemberId(m.id)
-                    setAddError(null)
-                  }}
-                  className="cursor-pointer text-xs text-primary hover:text-primary-dark"
+                  onClick={() => handleAddById(m.id)}
+                  disabled={addLoading}
+                  className="cursor-pointer text-xs text-primary hover:text-primary-dark disabled:opacity-50"
                 >
                   출석 추가
                 </button>
