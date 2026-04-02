@@ -101,7 +101,7 @@ export default function MemberList() {
     if (adding) {
       const { error: err } = await supabase.from('members').insert(payload)
       if (err) {
-        setError(err.message)
+        setError(err.code === '23505' ? '이미 등록된 전화번호입니다.' : err.message)
         return
       }
       cancelForm()
@@ -109,7 +109,7 @@ export default function MemberList() {
     } else if (editingId) {
       const { error: err } = await supabase.from('members').update(payload).eq('id', editingId)
       if (err) {
-        setError(err.message)
+        setError(err.code === '23505' ? '이미 등록된 전화번호입니다.' : err.message)
         return
       }
       cancelForm()
@@ -132,9 +132,22 @@ export default function MemberList() {
     try {
       const { rows, errors: parseErrors } = await parseMemberFile(file)
       const errors = [...parseErrors]
+
+      // 파일 내 중복 전화번호 사전 체크
+      const seenPhones = new Set<string>()
+      const uniqueRows: typeof rows = []
+      for (const row of rows) {
+        if (seenPhones.has(row.phone)) {
+          errors.push(`파일 내 중복 전화번호: ${row.name}(${row.phone})`)
+        } else {
+          seenPhones.add(row.phone)
+          uniqueRows.push(row)
+        }
+      }
+
       let success = 0
       let fail = 0
-      for (const row of rows) {
+      for (const row of uniqueRows) {
         const payload = {
           name: row.name.trim(),
           phone: row.phone.trim(),
