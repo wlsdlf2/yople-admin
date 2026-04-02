@@ -23,6 +23,8 @@ export default function MemberDetail() {
   const [attendedSet, setAttendedSet] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [graduating, setGraduating] = useState(false)
+  const [confirmGraduate, setConfirmGraduate] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -75,6 +77,24 @@ export default function MemberDetail() {
     fetchAttendance()
   }, [id, year])
 
+  const handleGraduate = async () => {
+    if (!id) return
+    setGraduating(true)
+    const { error: err } = await supabase
+      .from('members')
+      .update({ is_new_member: false })
+      .eq('id', id)
+    if (err) {
+      setError(err.message)
+      setGraduating(false)
+      setConfirmGraduate(false)
+      return
+    }
+    setMember((m) => m ? { ...m, is_new_member: false } : m)
+    setGraduating(false)
+    setConfirmGraduate(false)
+  }
+
   if (loading) return <p className="text-slate-500">불러오는 중…</p>
   if (error || !member) return <p className="text-red-600 bg-red-50 rounded-lg p-3">{error ?? '청년을 찾을 수 없습니다.'}</p>
 
@@ -94,15 +114,53 @@ export default function MemberDetail() {
       </button>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <h2 className="text-xl font-semibold text-slate-800">{member.name}</h2>
-          {member.is_new_member && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">새가족</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-semibold text-slate-800">{member.name}</h2>
+            {member.is_new_member && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">새가족</span>
+            )}
+            <span className="text-sm text-slate-500">{getCohort(member.birth_date)}년생</span>
+          </div>
+          {member.is_new_member && !confirmGraduate && (
+            <button
+              type="button"
+              onClick={() => setConfirmGraduate(true)}
+              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            >
+              등반 처리
+            </button>
           )}
-          <span className="text-sm text-slate-500">{getCohort(member.birth_date)}년생</span>
         </div>
         <p className="text-sm text-slate-500">{member.phone}</p>
         {member.memo && <p className="text-sm text-slate-400 mt-1">{member.memo}</p>}
+
+        {confirmGraduate && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <p className="text-sm text-slate-700 mb-2">
+              새가족에서 전체 청년으로 전환할까요? 출석 기록은 그대로 유지됩니다.
+            </p>
+            {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleGraduate}
+                disabled={graduating}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {graduating ? '처리 중…' : '확인'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmGraduate(false)}
+                disabled={graduating}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">

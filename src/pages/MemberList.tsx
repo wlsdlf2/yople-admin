@@ -161,14 +161,16 @@ export default function MemberList() {
     }
   }
 
-  const graduate = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 청년을 등반 처리할까요?\n새가족 탭에서 제외되고 전체 탭으로 이동합니다.`)) return
+  const [confirmGraduateId, setConfirmGraduateId] = useState<string | null>(null)
+
+  const graduate = async (id: string) => {
     const { error: err } = await supabase.from('members').update({ is_new_member: false }).eq('id', id)
     if (err) {
       setError(err.message)
       return
     }
     setError(null)
+    setConfirmGraduateId(null)
     load()
   }
 
@@ -428,50 +430,75 @@ export default function MemberList() {
           }).map((m) => (
             <li
               key={m.id}
-              className="relative bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-wrap items-center justify-between gap-2"
+              className="bg-white rounded-xl border border-slate-200 shadow-sm"
             >
-              <Link
-                to={`/dashboard/members/${m.id}`}
-                className="absolute inset-0 rounded-xl"
-                aria-label={m.name}
-              />
-              <div className="relative flex flex-wrap items-center gap-2 pointer-events-none">
-                <span className="font-medium text-slate-800">{m.name}</span>
-                {m.is_new_member && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                    새가족
-                  </span>
-                )}
-                <span className="text-slate-500 text-sm">{m.phone}</span>
-                {m.birth_date && (
-                  <span className="text-slate-400 text-sm">{m.birth_date}</span>
-                )}
-              </div>
-              <div className="relative z-10 flex gap-2">
-                {m.is_new_member && (
+              <div className="relative p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2">
+                <Link
+                  to={`/dashboard/members/${m.id}`}
+                  className="absolute inset-0 rounded-xl"
+                  aria-label={m.name}
+                />
+                <div className="relative flex flex-wrap items-center gap-2 pointer-events-none">
+                  <span className="font-medium text-slate-800">{m.name}</span>
+                  {m.is_new_member && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      새가족
+                    </span>
+                  )}
+                  <span className="text-slate-500 text-sm">{m.phone}</span>
+                  {m.birth_date && (
+                    <span className="text-slate-400 text-sm">{m.birth_date}</span>
+                  )}
+                </div>
+                <div className="relative z-10 flex gap-2">
+                  {m.is_new_member && confirmGraduateId !== m.id && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmGraduateId(m.id)}
+                      className="text-sm text-emerald-600 hover:text-emerald-700"
+                    >
+                      등반
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => graduate(m.id, m.name)}
-                    className="text-sm text-emerald-600 hover:text-emerald-700"
+                    onClick={() => openEdit(m)}
+                    className="cursor-pointer text-sm text-primary hover:text-primary-dark"
                   >
-                    등반
+                    수정
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => openEdit(m)}
-                  className="cursor-pointer text-sm text-primary hover:text-primary-dark"
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(m.id, m.name)}
-                  className="cursor-pointer text-sm text-red-600 hover:text-red-700"
-                >
-                  삭제
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(m.id, m.name)}
+                    className="cursor-pointer text-sm text-red-600 hover:text-red-700"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
+              {confirmGraduateId === m.id && (
+                <div className="px-4 pb-3 pt-0 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-slate-700">
+                    <span className="font-medium">{m.name}</span> 청년을 등반 처리할까요?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => graduate(m.id)}
+                      className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
+                    >
+                      확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmGraduateId(null)}
+                      className="px-3 py-1 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
