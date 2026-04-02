@@ -195,10 +195,11 @@ export default function Settings() {
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">현재 비밀번호</label>
                   <input
                     type="password"
+                    inputMode="numeric"
                     value={currentPassword}
-                    onChange={e => { setCurrentPassword(e.target.value); setVerifyError('') }}
+                    onChange={e => { setCurrentPassword(e.target.value.replace(/\D/g, '')); setVerifyError('') }}
                     onKeyDown={e => e.key === 'Enter' && handleVerifyCurrentPassword()}
-                    placeholder="현재 비밀번호 입력"
+                    placeholder="현재 비밀번호 입력 (숫자)"
                     className="w-full max-w-xs border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                   {verifyError && <p className="text-xs text-red-500 mt-1.5">{verifyError}</p>}
@@ -224,9 +225,10 @@ export default function Settings() {
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">새 비밀번호</label>
                   <input
                     type="password"
+                    inputMode="numeric"
                     value={newPassword}
-                    onChange={e => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess('') }}
-                    placeholder="새 비밀번호 입력 (4자 이상)"
+                    onChange={e => { setNewPassword(e.target.value.replace(/\D/g, '')); setPasswordError(''); setPasswordSuccess('') }}
+                    placeholder="숫자 4자리 이상"
                     className="w-full max-w-xs border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
@@ -234,10 +236,11 @@ export default function Settings() {
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">비밀번호 확인</label>
                   <input
                     type="password"
+                    inputMode="numeric"
                     value={confirmPassword}
-                    onChange={e => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess('') }}
+                    onChange={e => { setConfirmPassword(e.target.value.replace(/\D/g, '')); setPasswordError(''); setPasswordSuccess('') }}
                     onKeyDown={e => e.key === 'Enter' && handleSavePassword()}
-                    placeholder="비밀번호 다시 입력"
+                    placeholder="숫자 비밀번호 재입력"
                     className="w-full max-w-xs border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
