@@ -56,9 +56,15 @@ export default function Settings() {
       setCurrentUserId(session.user.id)
       setCurrentUserRole(userRow.role as Role)
 
+      const role = userRow.role as Role
+      const usersQuery = supabase.from('users').select('id, email, name, role').eq('approved', true).order('created_at', { ascending: true })
+      const filteredUsersQuery = role === 'admin'
+        ? usersQuery
+        : usersQuery.in('role', ['owner', 'manager', 'staff'])
+
       const [settingsRes, usersRes] = await Promise.all([
         supabase.from('app_settings').select('key, value').in('key', ['lock_enabled', 'lock_password_hash']),
-        supabase.from('users').select('id, email, name, role').eq('approved', true).order('created_at', { ascending: true }),
+        filteredUsersQuery,
       ])
 
       if (settingsRes.data) {
