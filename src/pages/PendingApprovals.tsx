@@ -124,7 +124,7 @@ export default function PendingApprovals() {
                   onChange={(e) =>
                     setSelectedRoles((prev) => ({ ...prev, [u.id]: e.target.value as Role }))
                   }
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="cursor-pointer rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   {(Object.keys(roleLabels) as Role[]).map((r) => (
                     <option key={r} value={r}>
@@ -135,14 +135,14 @@ export default function PendingApprovals() {
                 <button
                   type="button"
                   onClick={() => reject(u.id)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
+                  className="cursor-pointer px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
                 >
                   거절
                 </button>
                 <button
                   type="button"
                   onClick={() => approve(u.id)}
-                  className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark"
+                  className="cursor-pointer px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark"
                 >
                   수락
                 </button>

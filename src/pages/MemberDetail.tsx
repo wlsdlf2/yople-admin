@@ -126,7 +126,7 @@ export default function MemberDetail() {
             <button
               type="button"
               onClick={() => setConfirmGraduate(true)}
-              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+              className="cursor-pointer text-sm text-emerald-600 hover:text-emerald-700 font-medium"
             >
               등반 처리
             </button>
@@ -146,7 +146,7 @@ export default function MemberDetail() {
                 type="button"
                 onClick={handleGraduate}
                 disabled={graduating}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                className="cursor-pointer px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
               >
                 {graduating ? '처리 중…' : '확인'}
               </button>
@@ -154,7 +154,7 @@ export default function MemberDetail() {
                 type="button"
                 onClick={() => setConfirmGraduate(false)}
                 disabled={graduating}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
+                className="cursor-pointer px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
               >
                 취소
               </button>
@@ -175,7 +175,7 @@ export default function MemberDetail() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
+            className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
           >
             {availableYears.map((y) => (
               <option key={y} value={y}>{y}년</option>

@@ -46,7 +46,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
         <button
           type="button"
           onClick={onToggle}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+          className="cursor-pointer p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
           aria-label={collapsed ? '사이드바 열기' : '사이드바 닫기'}
         >
           {/* 열린 상태: ← (닫기) / 호버로 임시 열림: → (열린 채로 유지) */}
@@ -70,7 +70,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
               `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50'
+                  : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 cursor-pointer'
               }`
             }
           >

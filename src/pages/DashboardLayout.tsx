@@ -65,7 +65,7 @@ export default function DashboardLayout() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="text-sm text-primary hover:text-primary-dark"
+          className="cursor-pointer text-sm text-primary hover:text-primary-dark"
         >
           로그아웃
         </button>
@@ -84,7 +84,7 @@ export default function DashboardLayout() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="text-sm text-primary hover:text-primary-dark"
+          className="cursor-pointer text-sm text-primary hover:text-primary-dark"
         >
           로그아웃
         </button>
@@ -111,7 +111,7 @@ export default function DashboardLayout() {
           <button
             type="button"
             onClick={handleSignOut}
-            className="text-sm text-primary hover:text-primary-dark"
+            className="cursor-pointer text-sm text-primary hover:text-primary-dark"
           >
             로그아웃
           </button>

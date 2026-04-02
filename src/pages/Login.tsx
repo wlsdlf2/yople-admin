@@ -86,21 +86,21 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
+            className="cursor-pointer w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
           >
             {loading ? '로그인 중…' : '로그인'}
           </button>
           <button
             type="button"
             onClick={fillTestCredentials}
-            className="w-full py-3 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
+            className="cursor-pointer w-full py-3 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
           >
             테스트 로그인
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           계정이 없으신가요?{' '}
-          <Link to="/signup" className="text-primary hover:text-primary-dark">
+          <Link to="/signup" className="cursor-pointer text-primary hover:text-primary-dark">
             회원가입
           </Link>
         </p>

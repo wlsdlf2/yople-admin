@@ -178,7 +178,7 @@ export default function AttendanceDetail() {
     <div>
       <Link
         to="/dashboard/attendance"
-        className="inline-block text-sm text-slate-500 hover:text-primary mb-4"
+        className="cursor-pointer inline-block text-sm text-slate-500 hover:text-primary mb-4"
       >
         ← 주일별 출석 현황
       </Link>
@@ -196,7 +196,7 @@ export default function AttendanceDetail() {
           <select
             value={addMemberId}
             onChange={(e) => setAddMemberId(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm min-w-[140px]"
+            className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm min-w-[140px]"
           >
             <option value="">청년 선택</option>
             {members
@@ -211,7 +211,7 @@ export default function AttendanceDetail() {
             type="button"
             onClick={handleAdd}
             disabled={!addMemberId || addLoading}
-            className="rounded-lg bg-primary text-white px-3 py-1.5 text-sm hover:bg-primary-dark disabled:opacity-50"
+            className="cursor-pointer rounded-lg bg-primary text-white px-3 py-1.5 text-sm hover:bg-primary-dark disabled:opacity-50"
           >
             {addLoading ? '추가 중…' : '출석 추가'}
           </button>
@@ -230,7 +230,7 @@ export default function AttendanceDetail() {
                 {a.member_id ? (
                   <Link
                     to={`/dashboard/members/${a.member_id}`}
-                    className="font-medium text-slate-800 hover:text-primary"
+                    className="cursor-pointer font-medium text-slate-800 hover:text-primary"
                   >
                     {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
                   </Link>
@@ -251,14 +251,14 @@ export default function AttendanceDetail() {
                       <button
                         type="button"
                         onClick={handleUpdateTime}
-                        className="text-sm text-primary hover:text-primary-dark"
+                        className="cursor-pointer text-sm text-primary hover:text-primary-dark"
                       >
                         저장
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="text-sm text-slate-500 hover:text-slate-700"
+                        className="cursor-pointer text-sm text-slate-500 hover:text-slate-700"
                       >
                         취소
                       </button>
@@ -271,7 +271,7 @@ export default function AttendanceDetail() {
                       <button
                         type="button"
                         onClick={() => startEdit(a)}
-                        className="text-xs text-slate-500 hover:text-primary"
+                        className="cursor-pointer text-xs text-slate-500 hover:text-primary"
                       >
                         수정
                       </button>
@@ -281,7 +281,7 @@ export default function AttendanceDetail() {
                     type="button"
                     onClick={() => handleDelete(a.id)}
                     disabled={deletingId === a.id}
-                    className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
+                    className="cursor-pointer text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
                   >
                     {deletingId === a.id ? '삭제 중…' : '삭제'}
                   </button>
@@ -302,7 +302,7 @@ export default function AttendanceDetail() {
               <li key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
                 <Link
                   to={`/dashboard/members/${m.id}`}
-                  className="text-slate-700 hover:text-primary"
+                  className="cursor-pointer text-slate-700 hover:text-primary"
                 >
                   {m.name}
                 </Link>
@@ -312,7 +312,7 @@ export default function AttendanceDetail() {
                     setAddMemberId(m.id)
                     setAddError(null)
                   }}
-                  className="text-xs text-primary hover:text-primary-dark"
+                  className="cursor-pointer text-xs text-primary hover:text-primary-dark"
                 >
                   출석 추가
                 </button>

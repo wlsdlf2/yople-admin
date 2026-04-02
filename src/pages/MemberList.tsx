@@ -288,7 +288,7 @@ export default function MemberList() {
           <button
             type="button"
             onClick={openAdd}
-            className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark"
+            className="cursor-pointer px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark"
           >
             청년 추가
           </button>
@@ -380,14 +380,14 @@ export default function MemberList() {
             <button
               type="button"
               onClick={save}
-              className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark"
+              className="cursor-pointer px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark"
             >
               저장
             </button>
             <button
               type="button"
               onClick={cancelForm}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+              className="cursor-pointer px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
             >
               취소
             </button>
@@ -406,7 +406,7 @@ export default function MemberList() {
                   <button
                     type="button"
                     onClick={downloadMemberTemplate}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                    className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                   >
                     양식 다운로드
                   </button>
@@ -481,7 +481,7 @@ export default function MemberList() {
                     <button
                       type="button"
                       onClick={() => setConfirmGraduateId(m.id)}
-                      className="text-sm text-emerald-600 hover:text-emerald-700"
+                      className="cursor-pointer text-sm text-emerald-600 hover:text-emerald-700"
                     >
                       등반
                     </button>
@@ -511,14 +511,14 @@ export default function MemberList() {
                     <button
                       type="button"
                       onClick={() => graduate(m.id)}
-                      className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
+                      className="cursor-pointer px-3 py-1 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
                     >
                       확인
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmGraduateId(null)}
-                      className="px-3 py-1 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                      className="cursor-pointer px-3 py-1 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
                     >
                       취소
                     </button>

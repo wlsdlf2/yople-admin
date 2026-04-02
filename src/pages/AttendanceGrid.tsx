@@ -399,7 +399,7 @@ export default function AttendanceGrid() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
+            className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
           >
             {availableYears.map((y) => (
               <option key={y} value={y}>{y}년</option>
@@ -409,7 +409,7 @@ export default function AttendanceGrid() {
             type="button"
             onClick={handleDownloadYear}
             disabled={downloadLoading}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             {downloadLoading ? '다운로드 중…' : `${year}년 출석부 다운로드`}
           </button>
@@ -425,7 +425,7 @@ export default function AttendanceGrid() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`cursor-pointer px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === t
                 ? 'border-primary text-primary'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -448,7 +448,7 @@ export default function AttendanceGrid() {
             <button
               type="button"
               onClick={downloadAttendanceTemplate}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
             >
               양식 다운로드
             </button>
@@ -664,14 +664,14 @@ export default function AttendanceGrid() {
                 <button
                   type="button"
                   onClick={handleCancelSync}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   취소
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmSync}
-                  className="rounded-lg border border-red-600 bg-red-600 text-white px-3 py-1.5 text-sm hover:bg-red-700"
+                  className="cursor-pointer rounded-lg border border-red-600 bg-red-600 text-white px-3 py-1.5 text-sm hover:bg-red-700"
                 >
                   확인 및 동기화
                 </button>

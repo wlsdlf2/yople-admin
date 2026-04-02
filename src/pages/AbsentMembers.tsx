@@ -110,7 +110,7 @@ export default function AbsentMembers() {
           <select
             value={weeks}
             onChange={(e) => setWeeks(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
+            className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm"
           >
             {[3, 4, 5, 6].map((n) => (
               <option key={n} value={n}>{n}주</option>

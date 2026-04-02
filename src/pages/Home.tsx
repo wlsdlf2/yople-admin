@@ -60,7 +60,7 @@ export default function Home() {
         {/* 로그인 버튼 */}
         <Link
           to="/login"
-          className="block w-full py-4 px-6 rounded-xl bg-primary text-white text-lg font-semibold text-center hover:bg-primary-dark active:scale-[0.99] shadow-sm"
+          className="cursor-pointer block w-full py-4 px-6 rounded-xl bg-primary text-white text-lg font-semibold text-center hover:bg-primary-dark active:scale-[0.99] shadow-sm"
         >
           관리자 로그인
         </Link>

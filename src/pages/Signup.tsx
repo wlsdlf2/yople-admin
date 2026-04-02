@@ -153,14 +153,14 @@ export default function Signup() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
+            className="cursor-pointer w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
           >
             {loading ? '처리 중…' : '회원가입'}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           이미 계정이 있으신가요?{' '}
-          <Link to="/login" className="text-primary hover:text-primary-dark">
+          <Link to="/login" className="cursor-pointer text-primary hover:text-primary-dark">
             로그인
           </Link>
         </p>
