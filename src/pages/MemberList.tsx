@@ -188,7 +188,6 @@ export default function MemberList() {
   }
 
   const [confirmGraduateId, setConfirmGraduateId] = useState<string | null>(null)
-  const [confirmRevertId, setConfirmRevertId] = useState<string | null>(null)
 
   const graduate = async (id: string) => {
     const { error: err } = await supabase.from('members').update({ is_new_member: false }).eq('id', id)
@@ -201,16 +200,6 @@ export default function MemberList() {
     load()
   }
 
-  const revertToNew = async (id: string) => {
-    const { error: err } = await supabase.from('members').update({ is_new_member: true }).eq('id', id)
-    if (err) {
-      setError(err.message)
-      return
-    }
-    setError(null)
-    setConfirmRevertId(null)
-    load()
-  }
 
   const remove = async (id: string, name: string) => {
     if (!confirm(`"${name}" 청년을 명단에서 삭제할까요?`)) return
@@ -498,15 +487,6 @@ export default function MemberList() {
                       등반
                     </button>
                   )}
-                  {!m.is_new_member && confirmRevertId !== m.id && (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmRevertId(m.id)}
-                      className="cursor-pointer text-sm text-amber-600 hover:text-amber-700"
-                    >
-                      새가족 복귀
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => openEdit(m)}
@@ -539,29 +519,6 @@ export default function MemberList() {
                     <button
                       type="button"
                       onClick={() => setConfirmGraduateId(null)}
-                      className="cursor-pointer px-3 py-1 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              )}
-              {confirmRevertId === m.id && (
-                <div className="px-4 pb-3 pt-0 border-t border-slate-100 flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-slate-700">
-                    <span className="font-medium">{m.name}</span> 청년을 새가족으로 되돌릴까요?
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => revertToNew(m.id)}
-                      className="cursor-pointer px-3 py-1 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600"
-                    >
-                      확인
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmRevertId(null)}
                       className="cursor-pointer px-3 py-1 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
                     >
                       취소

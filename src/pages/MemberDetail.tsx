@@ -157,7 +157,7 @@ export default function MemberDetail() {
               onClick={() => setConfirmRevert(true)}
               className="cursor-pointer text-sm text-amber-600 hover:text-amber-700 font-medium"
             >
-              새가족 복귀
+              새가족 처리
             </button>
           )}
         </div>
