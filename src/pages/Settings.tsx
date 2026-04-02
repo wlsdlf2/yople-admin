@@ -277,8 +277,8 @@ export default function Settings() {
         )}
       </div>
 
-      {/* 사용자 관리 */}
-      <div className="bg-white rounded-xl border border-slate-200">
+      {/* 사용자 관리 (owner 전용) */}
+      {currentUserRole === 'owner' && <div className="bg-white rounded-xl border border-slate-200">
         <div className="p-5 border-b border-slate-100">
           <p className="text-sm font-medium text-slate-800">사용자 관리</p>
           <p className="text-xs text-slate-500 mt-0.5">등록된 관리자 목록을 확인하고 역할을 변경하거나 삭제할 수 있습니다</p>
@@ -350,7 +350,7 @@ export default function Settings() {
             </li>
           ))}
         </ul>
-      </div>
+      </div>}
     </div>
   )
 }
