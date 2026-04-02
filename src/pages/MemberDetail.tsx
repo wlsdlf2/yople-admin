@@ -25,6 +25,8 @@ export default function MemberDetail() {
   const [error, setError] = useState<string | null>(null)
   const [graduating, setGraduating] = useState(false)
   const [confirmGraduate, setConfirmGraduate] = useState(false)
+  const [confirmRevert, setConfirmRevert] = useState(false)
+  const [reverting, setReverting] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -76,6 +78,24 @@ export default function MemberDetail() {
     }
     fetchAttendance()
   }, [id, year])
+
+  const handleRevertToNew = async () => {
+    if (!id) return
+    setReverting(true)
+    const { error: err } = await supabase
+      .from('members')
+      .update({ is_new_member: true })
+      .eq('id', id)
+    if (err) {
+      setError(err.message)
+      setReverting(false)
+      setConfirmRevert(false)
+      return
+    }
+    setMember((m) => m ? { ...m, is_new_member: true } : m)
+    setReverting(false)
+    setConfirmRevert(false)
+  }
 
   const handleGraduate = async () => {
     if (!id) return
@@ -131,10 +151,45 @@ export default function MemberDetail() {
               등반 처리
             </button>
           )}
+          {!member.is_new_member && !confirmRevert && (
+            <button
+              type="button"
+              onClick={() => setConfirmRevert(true)}
+              className="cursor-pointer text-sm text-amber-600 hover:text-amber-700 font-medium"
+            >
+              새가족 복귀
+            </button>
+          )}
         </div>
         <p className="text-sm text-slate-500">{member.phone}</p>
         {member.memo && <p className="text-sm text-slate-400 mt-1">{member.memo}</p>}
 
+        {confirmRevert && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <p className="text-sm text-slate-700 mb-2">
+              새가족으로 되돌릴까요? 출석 기록은 그대로 유지됩니다.
+            </p>
+            {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleRevertToNew}
+                disabled={reverting}
+                className="cursor-pointer px-3 py-1.5 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+              >
+                {reverting ? '처리 중…' : '확인'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmRevert(false)}
+                disabled={reverting}
+                className="cursor-pointer px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
         {confirmGraduate && (
           <div className="mt-3 pt-3 border-t border-slate-100">
             <p className="text-sm text-slate-700 mb-2">
