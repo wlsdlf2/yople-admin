@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { downloadAttendanceTemplate, parseAttendanceFile } from '../lib/attendanceBulk'
+import { downloadAttendanceTemplate, parseAttendanceFile, downloadYearlyAttendanceGrid, parseYearlyAttendanceGrid } from '../lib/attendanceBulk'
 import { getCohort, getSundaysInYear } from '../lib/dateUtils'
 
 type Member = {
@@ -12,6 +12,13 @@ type Member = {
 }
 
 type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[]; duplicateErrors: string[] }
+
+type PendingSync = {
+  toInsert: { member_id: string; date: string }[]
+  toDelete: string[]
+  notFound: string[]
+  parseErrors: string[]
+}
 
 function formatDateCol(dateStr: string) {
   const d = new Date(dateStr + 'Z')
@@ -37,6 +44,19 @@ export default function AttendanceGrid() {
   const [uploadMessage, setUploadMessage] = useState('')
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 연간 출석부 다운로드/동기화 상태
+  const [downloadLoading, setDownloadLoading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [gridUploadStatus, setGridUploadStatus] = useState<
+    'idle' | 'parsing' | 'confirming' | 'syncing' | 'done' | 'error'
+  >('idle')
+  const [gridUploadError, setGridUploadError] = useState<string | null>(null)
+  const [pendingSync, setPendingSync] = useState<PendingSync | null>(null)
+  const [syncResult, setSyncResult] = useState<{
+    inserted: number; deleted: number; notFound: number
+  } | null>(null)
+  const gridFileInputRef = useRef<HTMLInputElement>(null)
 
   // 과거 연도 목록 조회 (최초 1회)
   useEffect(() => {
@@ -208,6 +228,160 @@ export default function AttendanceGrid() {
     }
   }
 
+  const handleDownloadYear = async () => {
+    setDownloadLoading(true)
+    setDownloadError(null)
+    try {
+      const [{ data: memberData, error: errM }, { data: attData, error: errA }, { data: visitorData, error: errV }] =
+        await Promise.all([
+          supabase
+            .from('members')
+            .select('id, name, birth_date, is_new_member')
+            .order('birth_date', { ascending: true, nullsFirst: false })
+            .order('name'),
+          supabase
+            .from('attendances')
+            .select('member_id, date')
+            .gte('date', `${year}-01-01`)
+            .lte('date', `${year}-12-31`)
+            .limit(100000),
+          supabase
+            .from('visitors')
+            .select('date')
+            .gte('date', `${year}-01-01`)
+            .lte('date', `${year}-12-31`)
+            .limit(100000),
+        ])
+      if (errM) throw new Error(errM.message)
+      if (errA) throw new Error(errA.message)
+      if (errV) throw new Error(errV.message)
+      const set = new Set<string>()
+      for (const a of attData ?? []) set.add(`${a.member_id}_${a.date}`)
+      const visitorCountByDate = new Map<string, number>()
+      for (const v of visitorData ?? []) {
+        const rec = v as { date: string }
+        visitorCountByDate.set(rec.date, (visitorCountByDate.get(rec.date) ?? 0) + 1)
+      }
+      downloadYearlyAttendanceGrid(
+        year,
+        (memberData ?? []) as { id: string; name: string; birth_date: string | null; is_new_member: boolean }[],
+        set,
+        visitorCountByDate
+      )
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : '다운로드 실패')
+    } finally {
+      setDownloadLoading(false)
+    }
+  }
+
+  const handleGridUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'xlsx' && ext !== 'xls') {
+      setGridUploadStatus('error')
+      setGridUploadError('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다.')
+      if (gridFileInputRef.current) gridFileInputRef.current.value = ''
+      return
+    }
+    setGridUploadStatus('parsing')
+    setGridUploadError(null)
+    setPendingSync(null)
+    setSyncResult(null)
+    try {
+      const { entries, allDates, errors: parseErrors } = await parseYearlyAttendanceGrid(file)
+      if (gridFileInputRef.current) gridFileInputRef.current.value = ''
+      if (allDates.length === 0) {
+        setGridUploadStatus('error')
+        setGridUploadError('날짜 컬럼을 찾을 수 없습니다. 연간 출석부 파일인지 확인해 주세요.')
+        return
+      }
+      const start = allDates[0]
+      const end = allDates[allDates.length - 1]
+      const [{ data: memberData, error: errM }, { data: existingAtt, error: errA }] =
+        await Promise.all([
+          supabase.from('members').select('id, name'),
+          supabase
+            .from('attendances')
+            .select('id, member_id, date')
+            .gte('date', start)
+            .lte('date', end)
+            .limit(100000),
+        ])
+      if (errM) throw new Error(errM.message)
+      if (errA) throw new Error(errA.message)
+      const nameToId = new Map<string, string>()
+      for (const m of memberData ?? []) {
+        const rec = m as { id: string; name: string }
+        if (rec.name?.trim()) nameToId.set(rec.name.trim(), rec.id)
+      }
+      const existingMap = new Map<string, string>()
+      for (const a of existingAtt ?? []) {
+        const rec = a as { id: string; member_id: string; date: string }
+        existingMap.set(`${rec.member_id}_${rec.date}`, rec.id)
+      }
+      const desiredSet = new Set<string>()
+      const notFound: string[] = []
+      for (const entry of entries) {
+        const memberId = nameToId.get(entry.name)
+        if (!memberId) { notFound.push(entry.name); continue }
+        for (const date of entry.dates) desiredSet.add(`${memberId}_${date}`)
+      }
+      const toInsert: { member_id: string; date: string }[] = []
+      for (const key of desiredSet) {
+        if (!existingMap.has(key)) {
+          const sep = key.lastIndexOf('_')
+          toInsert.push({ member_id: key.slice(0, sep), date: key.slice(sep + 1) })
+        }
+      }
+      const toDelete: string[] = []
+      for (const [key, id] of existingMap) {
+        if (!desiredSet.has(key)) toDelete.push(id)
+      }
+      setPendingSync({ toInsert, toDelete, notFound, parseErrors })
+      setGridUploadStatus('confirming')
+    } catch (err) {
+      setGridUploadStatus('error')
+      setGridUploadError(err instanceof Error ? err.message : '파일 처리 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleConfirmSync = async () => {
+    if (!pendingSync) return
+    setGridUploadStatus('syncing')
+    try {
+      const { toInsert, toDelete } = pendingSync
+      let inserted = 0
+      let deleted = 0
+      for (let i = 0; i < toInsert.length; i += 500) {
+        const chunk = toInsert.slice(i, i + 500)
+        const { error } = await supabase.from('attendances').insert(chunk)
+        if (error) throw new Error(`삽입 오류: ${error.message}`)
+        inserted += chunk.length
+      }
+      for (let i = 0; i < toDelete.length; i += 500) {
+        const chunk = toDelete.slice(i, i + 500)
+        const { error } = await supabase.from('attendances').delete().in('id', chunk)
+        if (error) throw new Error(`삭제 오류: ${error.message}`)
+        deleted += chunk.length
+      }
+      setSyncResult({ inserted, deleted, notFound: pendingSync.notFound.length })
+      setPendingSync(null)
+      setGridUploadStatus('done')
+      setRefreshTrigger((t) => t + 1)
+    } catch (err) {
+      setGridUploadStatus('error')
+      setGridUploadError(err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleCancelSync = () => {
+    setPendingSync(null)
+    setGridUploadStatus('idle')
+    setGridUploadError(null)
+  }
+
   if (loading) {
     return <p className="text-slate-500">불러오는 중…</p>
   }
@@ -220,7 +394,7 @@ export default function AttendanceGrid() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 className="text-xl font-semibold text-slate-800">주일별 출석 현황</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-slate-600">연도</span>
           <select
             value={year}
@@ -231,8 +405,19 @@ export default function AttendanceGrid() {
               <option key={y} value={y}>{y}년</option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={handleDownloadYear}
+            disabled={downloadLoading}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {downloadLoading ? '다운로드 중…' : `${year}년 출석부 다운로드`}
+          </button>
         </div>
       </div>
+      {downloadError && (
+        <p className="text-red-600 text-sm mb-3">{downloadError}</p>
+      )}
 
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {(['all', 'new'] as const).map((t) => (
@@ -445,6 +630,93 @@ export default function AttendanceGrid() {
           </div>
         </div>
       )}
+      {/* 연간 출석부 동기화 섹션 */}
+      <details className="mt-6 rounded-xl border border-slate-200 bg-slate-50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">
+          연간 출석부 동기화
+        </summary>
+        <div className="px-4 pb-4">
+          <p className="text-slate-600 text-sm mb-3">
+            위에서 다운로드한 연간 출석부를 수정한 뒤 업로드하면 O/빈칸 기준으로 출석 기록이 동기화됩니다.
+            <span className="text-amber-700 font-medium"> 기존 기록 삭제도 포함됩니다.</span>
+          </p>
+          {gridUploadStatus === 'confirming' && pendingSync ? (
+            <div className="space-y-3">
+              <div className="bg-white rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                <span className="mr-4">추가: <strong>{pendingSync.toInsert.length}건</strong></span>
+                <span className="mr-4">삭제: <strong>{pendingSync.toDelete.length}건</strong></span>
+                <span>명단에 없음: <strong>{pendingSync.notFound.length}명</strong></span>
+                {pendingSync.notFound.length > 0 && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    명단 없음: {pendingSync.notFound.slice(0, 5).join(', ')}{pendingSync.notFound.length > 5 ? ` 외 ${pendingSync.notFound.length - 5}명` : ''}
+                  </p>
+                )}
+              </div>
+              {pendingSync.parseErrors.length > 0 && (
+                <ul className="text-xs text-amber-700 list-disc list-inside">
+                  {pendingSync.parseErrors.slice(0, 5).map((msg, i) => (
+                    <li key={i}>{msg}</li>
+                  ))}
+                  {pendingSync.parseErrors.length > 5 && <li>외 {pendingSync.parseErrors.length - 5}건</li>}
+                </ul>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelSync}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSync}
+                  className="rounded-lg border border-red-600 bg-red-600 text-white px-3 py-1.5 text-sm hover:bg-red-700"
+                >
+                  확인 및 동기화
+                </button>
+              </div>
+            </div>
+          ) : gridUploadStatus === 'syncing' ? (
+            <p className="text-sm text-slate-600">동기화 중…</p>
+          ) : gridUploadStatus === 'done' && syncResult ? (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-700">
+                반영 완료: 추가 <strong>{syncResult.inserted}건</strong>,
+                삭제 <strong>{syncResult.deleted}건</strong>,
+                명단에 없음 <strong>{syncResult.notFound}명</strong>
+              </p>
+              <label className="rounded-lg border border-primary bg-primary text-white px-3 py-1.5 text-sm cursor-pointer hover:bg-primary-dark inline-block">
+                <input
+                  ref={gridFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="sr-only"
+                  onChange={handleGridUploadChange}
+                />
+                다시 업로드
+              </label>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className={`rounded-lg border px-3 py-1.5 text-sm cursor-pointer inline-block ${gridUploadStatus === 'parsing' ? 'border-slate-300 bg-slate-100 text-slate-500' : 'border-primary bg-primary text-white hover:bg-primary-dark'}`}>
+                <input
+                  ref={gridFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="sr-only"
+                  onChange={handleGridUploadChange}
+                  disabled={gridUploadStatus === 'parsing'}
+                />
+                {gridUploadStatus === 'parsing' ? '파싱 중…' : '파일 선택'}
+              </label>
+              {gridUploadStatus === 'error' && gridUploadError && (
+                <p className="text-sm text-red-600">{gridUploadError}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   )
 }
