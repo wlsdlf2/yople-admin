@@ -8,16 +8,16 @@ async function sha256(message: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-type Role = 'owner' | 'admin' | 'staff'
+type Role = 'admin' | 'owner' | 'manager' | 'staff'
 type User = { id: string; email: string; name: string | null; role: Role }
 
-const roleLabels: Record<Role, string> = { owner: '오너', admin: '관리자', staff: '스태프' }
+const roleLabels: Record<Role, string> = { admin: '관리자', owner: '담당 목사', manager: '전도사', staff: '스태프' }
 
 export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [notAllowed, setNotAllowed] = useState(false)
   const [currentUserId, setCurrentUserId] = useState('')
-  const [currentUserRole, setCurrentUserRole] = useState<Role>('staff')
+  const [currentUserRole, setCurrentUserRole] = useState<Role>('manager')
 
   // 잠금 화면 설정
   const [lockEnabled, setLockEnabled] = useState(false)
@@ -47,7 +47,7 @@ export default function Settings() {
         .eq('id', session.user.id)
         .maybeSingle()
 
-      if (!userRow || (userRow.role !== 'owner' && userRow.role !== 'admin')) {
+      if (!userRow || (userRow.role !== 'admin' && userRow.role !== 'owner' && userRow.role !== 'manager')) {
         setNotAllowed(true)
         setLoading(false)
         return
@@ -137,8 +137,8 @@ export default function Settings() {
 
   const canManage = (target: User) => {
     if (target.id === currentUserId) return false
-    if (currentUserRole === 'owner') return true
-    if (currentUserRole === 'admin') return target.role === 'staff'
+    if (currentUserRole === 'admin') return true
+    if (currentUserRole === 'owner') return target.role !== 'admin'
     return false
   }
 
@@ -173,7 +173,9 @@ export default function Settings() {
     )
   }
 
-  const roleOptions: Role[] = currentUserRole === 'owner' ? ['owner', 'admin', 'staff'] : ['admin', 'staff']
+  const roleOptions: Role[] = currentUserRole === 'admin'
+    ? ['admin', 'owner', 'manager', 'staff']
+    : ['owner', 'manager', 'staff']
 
   return (
     <div className="space-y-6">
@@ -277,8 +279,8 @@ export default function Settings() {
         )}
       </div>
 
-      {/* 사용자 관리 (owner 전용) */}
-      {currentUserRole === 'owner' && <div className="bg-white rounded-xl border border-slate-200">
+      {/* 사용자 관리 (admin, owner 전용) */}
+      {(currentUserRole === 'admin' || currentUserRole === 'owner') && <div className="bg-white rounded-xl border border-slate-200">
         <div className="p-5 border-b border-slate-100">
           <p className="text-sm font-medium text-slate-800">사용자 관리</p>
           <p className="text-xs text-slate-500 mt-0.5">등록된 관리자 목록을 확인하고 역할을 변경하거나 삭제할 수 있습니다</p>

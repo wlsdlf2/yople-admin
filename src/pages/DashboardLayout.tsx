@@ -9,7 +9,7 @@ export default function DashboardLayout() {
   const [loading, setLoading] = useState(true)
   const [notAllowed, setNotAllowed] = useState(false)
   const [pendingApproval, setPendingApproval] = useState(false)
-  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'staff' | null>(null)
+  const [userRole, setUserRole] = useState<'admin' | 'owner' | 'manager' | 'staff' | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarHovered, setSidebarHovered] = useState(false)
 
@@ -35,7 +35,7 @@ export default function DashboardLayout() {
         setLoading(false)
         return
       }
-      setUserRole(userRow.role as 'owner' | 'admin' | 'staff')
+      setUserRole(userRow.role as 'admin' | 'owner' | 'manager' | 'staff')
       setLoading(false)
     }
     check()

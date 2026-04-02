@@ -11,12 +11,13 @@ type PendingUser = {
   created_at: string
 }
 
-type Role = 'staff' | 'admin' | 'owner'
+type Role = 'admin' | 'owner' | 'manager' | 'staff'
 
 const roleLabels: Record<Role, string> = {
-  staff: '스태프',
   admin: '관리자',
-  owner: '오너',
+  owner: '담당 목사',
+  manager: '전도사',
+  staff: '스태프',
 }
 
 export default function PendingApprovals() {
@@ -39,7 +40,7 @@ export default function PendingApprovals() {
         .select('role')
         .eq('id', session.user.id)
         .single()
-      if (!me || (me.role !== 'owner' && me.role !== 'admin')) {
+      if (!me || (me.role !== 'admin' && me.role !== 'owner')) {
         setForbidden(true)
         setLoading(false)
         return
@@ -91,7 +92,7 @@ export default function PendingApprovals() {
   if (forbidden) {
     return (
       <p className="text-slate-600">
-        이 메뉴는 관리자(owner, admin)만 이용할 수 있습니다.
+        이 메뉴는 관리자(admin, owner)만 이용할 수 있습니다.
       </p>
     )
   }
