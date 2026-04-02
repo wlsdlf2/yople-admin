@@ -9,6 +9,7 @@ const links = [
 
 const adminOnlyLinks = [
   { to: '/dashboard/approvals', end: false, label: '회원가입 요청 수락' },
+  { to: '/dashboard/settings', end: false, label: '설정' },
 ]
 
 type NavbarProps = {

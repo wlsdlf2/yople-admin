@@ -9,6 +9,7 @@ import MemberList from './pages/MemberList'
 import MemberDetail from './pages/MemberDetail'
 import AbsentMembers from './pages/AbsentMembers'
 import PendingApprovals from './pages/PendingApprovals'
+import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="members/:id" element={<MemberDetail />} />
           <Route path="absent" element={<AbsentMembers />} />
           <Route path="approvals" element={<PendingApprovals />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
