@@ -4,6 +4,19 @@ import { supabase } from '../lib/supabase'
 import { downloadMemberTemplate, parseMemberFile } from '../lib/memberBulk'
 
 
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.startsWith('02')) {
+    if (digits.length <= 2) return digits
+    if (digits.length <= 6) return `${digits.slice(0, 2)}-${digits.slice(2)}`
+    if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
+  }
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
+
 function formatBirthday(birth_date: string): string {
   const d = new Date(birth_date + 'T00:00:00')
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
@@ -329,7 +342,7 @@ export default function MemberList() {
               <label className="block text-sm font-medium text-slate-700 mb-1">전화번호 *</label>
               <input
                 value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, phone: formatPhone(e.target.value) }))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800"
                 placeholder="010-1234-5678"
               />
