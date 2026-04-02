@@ -41,6 +41,7 @@ export default function AttendanceDetail() {
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmAbsentId, setConfirmAbsentId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTime, setEditTime] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -158,8 +159,8 @@ export default function AttendanceDetail() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('이 출석 기록을 삭제할까요?')) return
     setDeletingId(id)
+    setConfirmAbsentId(null)
     try {
       const { error: delErr } = await supabase.from('attendances').delete().eq('id', id)
       if (delErr) setError(delErr.message)
@@ -304,30 +305,42 @@ export default function AttendanceDetail() {
         ) : (
           <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
             {attendances.map((a) => (
-              <li key={a.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                {a.member_id ? (
-                  <Link to={`/dashboard/members/${a.member_id}`} className="cursor-pointer font-medium text-slate-800 hover:text-primary">
-                    {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-slate-800">{a.members?.name ?? a.member?.name ?? '(이름 없음)'}</span>
-                )}
-                <div className="flex items-center gap-2">
-                  {editingId === a.id ? (
-                    <>
-                      <input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-                      <button type="button" onClick={handleUpdateTime} className="cursor-pointer text-sm text-primary hover:text-primary-dark">저장</button>
-                      <button type="button" onClick={() => setEditingId(null)} className="cursor-pointer text-sm text-slate-500 hover:text-slate-700">취소</button>
-                    </>
+              <li key={a.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {a.member_id ? (
+                    <Link to={`/dashboard/members/${a.member_id}`} className="cursor-pointer font-medium text-slate-800 hover:text-primary">
+                      {a.members?.name ?? a.member?.name ?? '(이름 없음)'}
+                    </Link>
                   ) : (
-                    <>
-                      <span className="text-xs text-slate-400">{formatTime(a.created_at)} 체크인</span>
-                      <button type="button" onClick={() => startEdit(a)} className="cursor-pointer text-xs text-slate-500 hover:text-primary">수정</button>
-                    </>
+                    <span className="font-medium text-slate-800">{a.members?.name ?? a.member?.name ?? '(이름 없음)'}</span>
                   )}
-                  <button type="button" onClick={() => handleDelete(a.id)} disabled={deletingId === a.id} className="cursor-pointer text-xs text-red-600 hover:text-red-700 disabled:opacity-50">
-                    {deletingId === a.id ? '삭제 중…' : '삭제'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {editingId === a.id ? (
+                      <>
+                        <input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+                        <button type="button" onClick={handleUpdateTime} className="cursor-pointer text-sm text-primary hover:text-primary-dark">저장</button>
+                        <button type="button" onClick={() => setEditingId(null)} className="cursor-pointer text-sm text-slate-500 hover:text-slate-700">취소</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs text-slate-400">{formatTime(a.created_at)} 체크인</span>
+                        <button type="button" onClick={() => startEdit(a)} className="cursor-pointer text-xs text-slate-500 hover:text-primary">수정</button>
+                      </>
+                    )}
+                    {confirmAbsentId === a.id ? (
+                      <>
+                        <span className="text-xs text-slate-500">결석 처리할까요?</span>
+                        <button type="button" onClick={() => handleDelete(a.id)} disabled={deletingId === a.id} className="cursor-pointer text-xs text-red-600 hover:text-red-700 disabled:opacity-50 font-medium">
+                          {deletingId === a.id ? '처리 중…' : '확인'}
+                        </button>
+                        <button type="button" onClick={() => setConfirmAbsentId(null)} className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">취소</button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => setConfirmAbsentId(a.id)} disabled={deletingId === a.id} className="cursor-pointer text-xs text-slate-500 hover:text-red-600 disabled:opacity-50">
+                        결석 처리
+                      </button>
+                    )}
+                  </div>
                 </div>
               </li>
             ))}
