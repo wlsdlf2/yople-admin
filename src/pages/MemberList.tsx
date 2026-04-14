@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadMemberTemplate, parseMemberFile } from '../lib/memberBulk'
 
@@ -43,6 +43,8 @@ const emptyForm = {
 }
 
 export default function MemberList() {
+  const { userRole } = useOutletContext<{ userRole: 'admin' | 'owner' | 'manager' | 'staff' | null }>()
+  const canEdit = userRole !== 'staff'
   const [list, setList] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -290,7 +292,7 @@ export default function MemberList() {
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 className="text-xl font-semibold text-slate-800">청년 명단</h2>
-        {!adding && !editingId && (
+        {canEdit && !adding && !editingId && (
           <button
             type="button"
             onClick={openAdd}
@@ -331,7 +333,7 @@ export default function MemberList() {
         <p className="text-red-600 bg-red-50 rounded-lg p-3 mb-4">{error}</p>
       )}
 
-      {(adding || editingId) && (
+      {canEdit && (adding || editingId) && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
           <h3 className="font-medium text-slate-800 mb-3">{adding ? '새 청년 등록' : '수정'}</h3>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -516,33 +518,35 @@ export default function MemberList() {
                     <span className="text-slate-400 text-sm">{m.birth_date}</span>
                   )}
                 </div>
-                <div className="relative z-10 flex gap-2">
-                  {m.is_new_member && confirmGraduateId !== m.id && (
+                {canEdit && (
+                  <div className="relative z-10 flex gap-2">
+                    {m.is_new_member && confirmGraduateId !== m.id && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmGraduateId(m.id)}
+                        className="cursor-pointer text-sm text-emerald-600 hover:text-emerald-700"
+                      >
+                        등반
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setConfirmGraduateId(m.id)}
-                      className="cursor-pointer text-sm text-emerald-600 hover:text-emerald-700"
+                      onClick={() => openEdit(m)}
+                      className="cursor-pointer text-sm text-primary hover:text-primary-dark"
                     >
-                      등반
+                      수정
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => openEdit(m)}
-                    className="cursor-pointer text-sm text-primary hover:text-primary-dark"
-                  >
-                    수정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => remove(m.id, m.name)}
-                    className="cursor-pointer text-sm text-red-600 hover:text-red-700"
-                  >
-                    삭제
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => remove(m.id, m.name)}
+                      className="cursor-pointer text-sm text-red-600 hover:text-red-700"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                )}
               </div>
-              {confirmGraduateId === m.id && (
+              {canEdit && confirmGraduateId === m.id && (
                 <div className="px-4 pb-3 pt-0 border-t border-slate-100 flex flex-wrap items-center gap-3">
                   <p className="text-sm text-slate-700">
                     <span className="font-medium">{m.name}</span> 청년을 등반 처리할까요?

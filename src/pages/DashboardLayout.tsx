@@ -118,7 +118,7 @@ export default function DashboardLayout() {
         </header>
         <main className="p-4 sm:p-6 flex-1 overflow-auto">
           <div className={sidebarCollapsed && !sidebarHovered ? 'w-full' : 'max-w-4xl mx-auto'}>
-            <Outlet />
+            <Outlet context={{ userRole }} />
           </div>
         </main>
       </div>
