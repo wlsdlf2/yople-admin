@@ -34,6 +34,7 @@ export default function AttendanceDetail() {
   const [attendances, setAttendances] = useState<AttendanceRow[]>([])
   const [members, setMembers] = useState<MemberOption[]>([])
   const [visitorCount, setVisitorCount] = useState(0)
+  const [visitorLoading, setVisitorLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [nameInput, setNameInput] = useState('')
@@ -57,14 +58,14 @@ export default function AttendanceDetail() {
           .select('id, date, created_at, member_id, members(name)')
           .eq('date', date)
           .order('created_at', { ascending: true }),
-        supabase.from('visitors').select('*', { count: 'exact', head: true }).eq('date', date),
+        supabase.from('visitors').select('count').eq('date', date).maybeSingle(),
         supabase.from('members').select('id, name, birth_date').order('birth_date', { ascending: true }).order('name', { ascending: true }),
       ])
       if (attRes.error) { setError(attRes.error.message); setLoading(false); return }
       if (visRes.error) { setError(visRes.error.message); setLoading(false); return }
       if (memRes.error) { setError(memRes.error.message); setLoading(false); return }
       setAttendances((attRes.data ?? []) as unknown as AttendanceRow[])
-      setVisitorCount(visRes.count ?? 0)
+      setVisitorCount((visRes.data as { count: number } | null)?.count ?? 0)
       setMembers((memRes.data ?? []) as MemberOption[])
     } catch {
       setError('데이터를 불러오지 못했습니다.')
@@ -167,6 +168,30 @@ export default function AttendanceDetail() {
       else setRefreshTrigger((t) => t + 1)
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleVisitorIncrement = async () => {
+    if (!date) return
+    setVisitorLoading(true)
+    const newCount = visitorCount + 1
+    try {
+      const { error } = await supabase.from('visitors').upsert({ date, count: newCount }, { onConflict: 'date' })
+      if (!error) setVisitorCount(newCount)
+    } finally {
+      setVisitorLoading(false)
+    }
+  }
+
+  const handleVisitorDecrement = async () => {
+    if (!date || visitorCount <= 0) return
+    setVisitorLoading(true)
+    const newCount = visitorCount - 1
+    try {
+      const { error } = await supabase.from('visitors').upsert({ date, count: newCount }, { onConflict: 'date' })
+      if (!error) setVisitorCount(newCount)
+    } finally {
+      setVisitorLoading(false)
     }
   }
 
@@ -376,12 +401,28 @@ export default function AttendanceDetail() {
         )}
       </section>
 
-      {visitorCount > 0 && (
-        <section>
-          <h3 className="text-sm font-medium text-slate-600 mb-2">방문자 ({visitorCount}명)</h3>
-          <p className="text-slate-500 text-sm">해당 주일에 방문자로 등록된 분이 {visitorCount}명 있습니다.</p>
-        </section>
-      )}
+      <section>
+        <h3 className="text-sm font-medium text-slate-600 mb-2">방문자</h3>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleVisitorDecrement}
+            disabled={visitorLoading || visitorCount <= 0}
+            className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
+          >
+            −
+          </button>
+          <span className="text-slate-800 font-semibold w-12 text-center">{visitorCount}명</span>
+          <button
+            type="button"
+            onClick={handleVisitorIncrement}
+            disabled={visitorLoading}
+            className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
+          >
+            +
+          </button>
+        </div>
+      </section>
     </div>
   )
 }

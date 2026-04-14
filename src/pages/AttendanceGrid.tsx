@@ -118,7 +118,7 @@ export default function AttendanceGrid() {
         }
         const { data: visitorData, error: errV } = await supabase
           .from('visitors')
-          .select('date')
+          .select('date, count')
           .gte('date', start)
           .lte('date', end)
 
@@ -130,8 +130,8 @@ export default function AttendanceGrid() {
 
         const visitorCount = new Map<string, number>()
         for (const v of visitorData ?? []) {
-          const vv = v as { date: string }
-          visitorCount.set(vv.date, (visitorCount.get(vv.date) ?? 0) + 1)
+          const vv = v as { date: string; count: number }
+          visitorCount.set(vv.date, vv.count)
         }
 
         setMembers((memberData ?? []) as Member[])
@@ -247,7 +247,7 @@ export default function AttendanceGrid() {
             .limit(100000),
           supabase
             .from('visitors')
-            .select('date')
+            .select('date, count')
             .gte('date', `${year}-01-01`)
             .lte('date', `${year}-12-31`)
             .limit(100000),
@@ -259,8 +259,8 @@ export default function AttendanceGrid() {
       for (const a of attData ?? []) set.add(`${a.member_id}_${a.date}`)
       const visitorCountByDate = new Map<string, number>()
       for (const v of visitorData ?? []) {
-        const rec = v as { date: string }
-        visitorCountByDate.set(rec.date, (visitorCountByDate.get(rec.date) ?? 0) + 1)
+        const rec = v as { date: string; count: number }
+        visitorCountByDate.set(rec.date, rec.count)
       }
       downloadYearlyAttendanceGrid(
         year,
