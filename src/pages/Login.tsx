@@ -10,11 +10,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const fillTestCredentials = () => {
-    setEmail('test@gmail.com')
-    setPassword('12345678')
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -89,13 +84,6 @@ export default function Login() {
             className="cursor-pointer w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
           >
             {loading ? '로그인 중…' : '로그인'}
-          </button>
-          <button
-            type="button"
-            onClick={fillTestCredentials}
-            className="cursor-pointer w-full py-3 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
-          >
-            테스트 로그인
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
