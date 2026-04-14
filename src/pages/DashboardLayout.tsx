@@ -30,7 +30,7 @@ export default function DashboardLayout() {
         setLoading(false)
         return
       }
-      if (userRow.role === 'staff' && !userRow.approved) {
+      if (!userRow.approved) {
         setPendingApproval(true)
         setLoading(false)
         return
