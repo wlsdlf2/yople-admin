@@ -483,7 +483,9 @@ export default function MemberList() {
       )}
 
       {list.length === 0 && !adding ? (
-        <p className="text-slate-600">등록된 청년이 없습니다. 「청년 추가」로 등록하세요.</p>
+        <p className="text-slate-600">
+          {canEdit ? '등록된 청년이 없습니다. 「청년 추가」로 등록하세요.' : '등록된 청년이 없습니다.'}
+        </p>
       ) : (
         <ul className="space-y-2">
           {list.filter((m) => {
