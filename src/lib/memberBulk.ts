@@ -1,12 +1,13 @@
 import * as XLSX from 'xlsx'
 
-const TEMPLATE_HEADERS = ['이름', '전화번호', '생년월일', '새가족', '비고'] as const
+const TEMPLATE_HEADERS = ['이름', '전화번호', '생년월일', '성별', '새가족', '비고'] as const
 const TEMPLATE_SHEET_NAME = '청년명단'
 
 export type MemberRow = {
   name: string
   phone: string
   birth_date: string | null
+  gender: '남' | '여' | null
   is_new_member: boolean
   memo: string | null
 }
@@ -15,14 +16,15 @@ export type MemberRow = {
 export function downloadMemberTemplate(): void {
   const wsData: string[][] = [
     [...TEMPLATE_HEADERS],
-    ['홍길동', '010-1234-5678', '1995-01-15', 'Y', ''],
-    ['김영희', '010-1111-2222', '1998-06-01', 'N', ''],
+    ['홍길동', '010-1234-5678', '1995-01-15', '남', 'Y', ''],
+    ['김영희', '010-1111-2222', '1998-06-01', '여', 'N', ''],
   ]
   const ws = XLSX.utils.aoa_to_sheet(wsData)
   ws['!cols'] = [
     { wch: 10 },
     { wch: 18 },
     { wch: 12 },
+    { wch: 8 },
     { wch: 8 },
     { wch: 15 },
   ]
@@ -97,10 +99,13 @@ export function parseMemberFile(file: File): Promise<{ rows: MemberRow[]; errors
             errors.push(`${rowNo}행: 전화번호가 비어 있습니다.`)
             continue
           }
+          const genderRaw = String(raw['성별'] ?? raw['성별 '] ?? '').trim()
+          const gender = genderRaw === '남' || genderRaw === '여' ? genderRaw : null
           rows.push({
             name,
             phone,
             birth_date: normalizeDate(raw['생년월일'] ?? raw['생년월일 '] ?? ''),
+            gender,
             is_new_member: normalizeNewMember(raw['새가족'] ?? raw['새가족 '] ?? 'Y'),
             memo: String(raw['비고'] ?? raw['비고 '] ?? '').trim() || null,
           })

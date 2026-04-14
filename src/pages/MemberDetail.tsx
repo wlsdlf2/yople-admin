@@ -8,6 +8,7 @@ type Member = {
   name: string
   phone: string
   birth_date: string | null
+  gender: '남' | '여' | null
   is_new_member: boolean
   memo: string | null
 }
@@ -33,7 +34,7 @@ export default function MemberDetail() {
     const fetchMember = async () => {
       const { data, error: err } = await supabase
         .from('members')
-        .select('id, name, phone, birth_date, is_new_member, memo')
+        .select('id, name, phone, birth_date, gender, is_new_member, memo')
         .eq('id', id)
         .single()
       if (err || !data) {
@@ -139,6 +140,11 @@ export default function MemberDetail() {
             <h2 className="text-xl font-semibold text-slate-800">{member.name}</h2>
             {member.is_new_member && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">새가족</span>
+            )}
+            {member.gender && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${member.gender === '남' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                {member.gender}
+              </span>
             )}
             <span className="text-sm text-slate-500">{getCohort(member.birth_date)}년생</span>
           </div>

@@ -27,6 +27,7 @@ type Member = {
   name: string
   phone: string
   birth_date: string | null
+  gender: '남' | '여' | null
   is_new_member: boolean
   memo: string | null
   created_at: string
@@ -36,6 +37,7 @@ const emptyForm = {
   name: '',
   phone: '',
   birth_date: '',
+  gender: '' as '남' | '여' | '',
   is_new_member: true,
   memo: '',
 }
@@ -58,7 +60,7 @@ export default function MemberList() {
     setError(null)
     const { data, error: err } = await supabase
       .from('members')
-      .select('id, name, phone, birth_date, is_new_member, memo, created_at')
+      .select('id, name, phone, birth_date, gender, is_new_member, memo, created_at')
       .order('birth_date', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true })
     if (err) {
@@ -87,6 +89,7 @@ export default function MemberList() {
       name: m.name,
       phone: m.phone,
       birth_date: m.birth_date ?? '',
+      gender: m.gender ?? '',
       is_new_member: m.is_new_member,
       memo: m.memo ?? '',
     })
@@ -108,6 +111,7 @@ export default function MemberList() {
       name: form.name.trim(),
       phone: form.phone.trim(),
       birth_date: form.birth_date || null,
+      gender: form.gender || null,
       is_new_member: form.is_new_member,
       memo: form.memo.trim() || null,
     }
@@ -165,6 +169,7 @@ export default function MemberList() {
           name: row.name.trim(),
           phone: row.phone.trim(),
           birth_date: row.birth_date || null,
+          gender: row.gender || null,
           is_new_member: Boolean(row.is_new_member),
           memo: row.memo?.trim() || null,
         }
@@ -357,6 +362,35 @@ export default function MemberList() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">성별</label>
+              <div className="flex gap-3 mt-1">
+                {(['남', '여'] as const).map((g) => (
+                  <label key={g} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value={g}
+                      checked={form.gender === g}
+                      onChange={() => setForm((f) => ({ ...f, gender: g }))}
+                      className="border-slate-300"
+                    />
+                    {g}
+                  </label>
+                ))}
+                <label className="flex items-center gap-1.5 text-sm text-slate-500 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="gender"
+                    value=""
+                    checked={form.gender === ''}
+                    onChange={() => setForm((f) => ({ ...f, gender: '' }))}
+                    className="border-slate-300"
+                  />
+                  미입력
+                </label>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -467,6 +501,11 @@ export default function MemberList() {
                 />
                 <div className="relative flex flex-wrap items-center gap-2 pointer-events-none">
                   <span className="font-medium text-slate-800">{m.name}</span>
+                  {m.gender && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${m.gender === '남' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                      {m.gender}
+                    </span>
+                  )}
                   {m.is_new_member && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                       새가족
