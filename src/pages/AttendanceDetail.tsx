@@ -96,12 +96,6 @@ export default function AttendanceDetail() {
     return acc
   }, {})
 
-  // 검색 결과 동명이인 여부 (nameMatches 내에서)
-  const matchNameCount = nameMatches.reduce<Record<string, number>>((acc, m) => {
-    acc[m.name] = (acc[m.name] ?? 0) + 1
-    return acc
-  }, {})
-
   const addToTag = (member: MemberOption) => {
     setPendingTags((prev) => [...prev, member])
     setNameInput('')
@@ -270,26 +264,21 @@ export default function AttendanceDetail() {
                 <p className="px-3 py-2 text-xs text-slate-400">검색 결과가 없습니다</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {nameMatches.map((m) => {
-                    const hasDuplicate = (matchNameCount[m.name] ?? 0) > 1
-                    return (
-                      <li key={m.id} className="flex items-center justify-between px-3 py-2 gap-2">
-                        <span className="text-sm text-slate-700">
-                          {m.name}
-                          {hasDuplicate && (
-                            <span className="ml-1 text-xs text-slate-400">({getCohort(m.birth_date)}년생)</span>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => addToTag(m)}
-                          className="cursor-pointer text-xs text-primary hover:text-primary-dark flex-shrink-0"
-                        >
-                          선택
-                        </button>
-                      </li>
-                    )
-                  })}
+                  {nameMatches.map((m) => (
+                    <li key={m.id} className="flex items-center justify-between px-3 py-2 gap-2">
+                      <span className="text-sm text-slate-700">
+                        {m.name}
+                        <span className="ml-1 text-xs text-slate-400">{getCohort(m.birth_date)}년생</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => addToTag(m)}
+                        className="cursor-pointer text-xs text-primary hover:text-primary-dark flex-shrink-0"
+                      >
+                        선택
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -305,6 +294,7 @@ export default function AttendanceDetail() {
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
                   >
                     {t.name}
+                    <span className="opacity-60 font-normal">{getCohort(t.birth_date)}년생</span>
                     <button
                       type="button"
                       onClick={() => removeTag(t.id)}
