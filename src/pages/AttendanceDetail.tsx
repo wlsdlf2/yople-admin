@@ -197,7 +197,8 @@ export default function AttendanceDetail() {
 
   const startEdit = (a: AttendanceRow) => {
     const d = new Date(a.created_at)
-    setEditTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)
+    const kstHours = (d.getUTCHours() + 9) % 24
+    setEditTime(`${String(kstHours).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`)
     setEditingId(a.id)
   }
 
@@ -205,7 +206,11 @@ export default function AttendanceDetail() {
     if (!editingId || !date || !editTime.trim()) return
     const [h, m] = editTime.trim().split(':').map(Number)
     if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return
-    const newCreatedAt = new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00.000Z`)
+    // 입력값은 KST → UTC로 변환하여 저장 (KST = UTC+9)
+    const [y, mo, dy] = date.split('-').map(Number)
+    const baseMs = Date.UTC(y, mo - 1, dy, 0, 0, 0, 0)
+    const offsetMs = (h * 60 + m - 9 * 60) * 60 * 1000
+    const newCreatedAt = new Date(baseMs + offsetMs)
     try {
       const { error: upErr } = await supabase.from('attendances').update({ created_at: newCreatedAt.toISOString() }).eq('id', editingId)
       if (upErr) setError(upErr.message)

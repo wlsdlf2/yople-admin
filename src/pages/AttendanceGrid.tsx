@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadAttendanceTemplate, parseAttendanceFile, downloadYearlyAttendanceGrid, parseYearlyAttendanceGrid } from '../lib/attendanceBulk'
-import { getCohort, getSundaysInYear } from '../lib/dateUtils'
+import { getCohort, getSundaysInYear, getAttendanceGrade } from '../lib/dateUtils'
 
 type Member = {
   id: string
@@ -33,6 +33,7 @@ export default function AttendanceGrid() {
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
   const [members, setMembers] = useState<Member[]>([])
   const [attendedSet, setAttendedSet] = useState<Set<string>>(new Set())
+  const [gradeMap, setGradeMap] = useState<Map<string, 'A' | 'B' | 'C'>>(new Map())
   const [datesWithData, setDatesWithData] = useState<Set<string>>(new Set())
   const [visitorCountByDate, setVisitorCountByDate] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -100,7 +101,7 @@ export default function AttendanceGrid() {
 
         const { data: attData, error: errA } = await supabase
           .from('attendances')
-          .select('member_id, date')
+          .select('member_id, date, created_at')
           .gte('date', start)
           .lte('date', end)
 
@@ -111,9 +112,12 @@ export default function AttendanceGrid() {
         }
 
         const attended = new Set<string>()
+        const grades = new Map<string, 'A' | 'B' | 'C'>()
         const withData = new Set<string>()
         for (const a of attData ?? []) {
-          attended.add(`${a.member_id}_${a.date}`)
+          const key = `${a.member_id}_${a.date}`
+          attended.add(key)
+          grades.set(key, getAttendanceGrade((a as { created_at: string }).created_at))
           withData.add(a.date)
         }
         const { data: visitorData, error: errV } = await supabase
@@ -136,6 +140,7 @@ export default function AttendanceGrid() {
 
         setMembers((memberData ?? []) as Member[])
         setAttendedSet(attended)
+        setGradeMap(grades)
         setDatesWithData(withData)
         setVisitorCountByDate(visitorCount)
       } catch {
@@ -567,7 +572,11 @@ export default function AttendanceGrid() {
                       {!datesWithData.has(d) ? (
                         <span className="text-slate-200">·</span>
                       ) : attendedSet.has(`${m.id}_${d}`) ? (
-                        <span className="text-primary font-medium">O</span>
+                        (() => {
+                          const grade = gradeMap.get(`${m.id}_${d}`) ?? 'A'
+                          const cls = grade === 'A' ? 'text-emerald-600' : grade === 'B' ? 'text-amber-500' : 'text-red-500'
+                          return <span className={`${cls} font-medium`}>{grade}</span>
+                        })()
                       ) : (
                         <span className="text-slate-300">-</span>
                       )}

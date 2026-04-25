@@ -20,3 +20,13 @@ export function getCohort(birth_date: string | null): string {
   const y = new Date(birth_date).getFullYear() % 100
   return String(y).padStart(2, '0')
 }
+
+/** 체크인 시각(UTC ISO)을 KST 기준으로 A/B/C 등급으로 변환
+ * A: ~14:10 KST, B: ~14:20 KST, C: 14:20 초과 */
+export function getAttendanceGrade(createdAt: string): 'A' | 'B' | 'C' {
+  const d = new Date(createdAt)
+  const kstMinutes = ((d.getUTCHours() + 9) % 24) * 60 + d.getUTCMinutes()
+  if (kstMinutes <= 14 * 60 + 10) return 'A'
+  if (kstMinutes <= 14 * 60 + 20) return 'B'
+  return 'C'
+}

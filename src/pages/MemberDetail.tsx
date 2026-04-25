@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getCohort, getSundaysInYear } from '../lib/dateUtils'
+import { getCohort, getSundaysInYear, getAttendanceGrade } from '../lib/dateUtils'
 
 type Member = {
   id: string
@@ -21,7 +21,7 @@ export default function MemberDetail() {
   const [member, setMember] = useState<Member | null>(null)
   const [year, setYear] = useState(currentYear)
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
-  const [attendedSet, setAttendedSet] = useState<Set<string>>(new Set())
+  const [attendanceGradeMap, setAttendanceGradeMap] = useState<Map<string, 'A' | 'B' | 'C'>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [graduating, setGraduating] = useState(false)
@@ -46,7 +46,7 @@ export default function MemberDetail() {
 
       const { data: allAtt } = await supabase
         .from('attendances')
-        .select('date')
+        .select('date, created_at')
         .eq('member_id', id)
       if (allAtt && allAtt.length > 0) {
         const years = new Set<number>()
@@ -67,15 +67,15 @@ export default function MemberDetail() {
     const fetchAttendance = async () => {
       const { data } = await supabase
         .from('attendances')
-        .select('date')
+        .select('date, created_at')
         .eq('member_id', id)
         .gte('date', `${year}-01-01`)
         .lte('date', `${year}-12-31`)
-      const s = new Set<string>()
-      for (const row of (data ?? []) as { date: string }[]) {
-        s.add(row.date)
+      const gradeMap = new Map<string, 'A' | 'B' | 'C'>()
+      for (const row of (data ?? []) as { date: string; created_at: string }[]) {
+        gradeMap.set(row.date, getAttendanceGrade(row.created_at))
       }
-      setAttendedSet(s)
+      setAttendanceGradeMap(gradeMap)
     }
     fetchAttendance()
   }, [id, year])
@@ -121,7 +121,7 @@ export default function MemberDetail() {
 
   const sundays = getSundaysInYear(year)
   const pastSundays = sundays.filter((d) => d <= new Date().toISOString().slice(0, 10))
-  const attendedCount = pastSundays.filter((d) => attendedSet.has(d)).length
+  const attendedCount = pastSundays.filter((d) => attendanceGradeMap.has(d)).length
   const rate = pastSundays.length > 0 ? Math.round((attendedCount / pastSundays.length) * 100) : 0
 
   return (
@@ -267,8 +267,12 @@ export default function MemberDetail() {
                   <td key={d} className="p-1 text-center">
                     {isFuture ? (
                       <span className="text-slate-200">·</span>
-                    ) : attendedSet.has(d) ? (
-                      <span className="text-primary font-medium">O</span>
+                    ) : attendanceGradeMap.has(d) ? (
+                      (() => {
+                        const grade = attendanceGradeMap.get(d)!
+                        const cls = grade === 'A' ? 'text-emerald-600' : grade === 'B' ? 'text-amber-500' : 'text-red-500'
+                        return <span className={`${cls} font-medium`}>{grade}</span>
+                      })()
                     ) : (
                       <span className="text-slate-300">-</span>
                     )}
