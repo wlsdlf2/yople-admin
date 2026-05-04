@@ -45,6 +45,9 @@ export default function AttendanceDetail() {
   const [confirmAbsentId, setConfirmAbsentId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTime, setEditTime] = useState('')
+  const [attendedOpen, setAttendedOpen] = useState(true)
+  const [absentOpen, setAbsentOpen] = useState(true)
+  const [visitorOpen, setVisitorOpen] = useState(true)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
@@ -242,8 +245,19 @@ export default function AttendanceDetail() {
       </p>
 
       <section className="mb-6">
-        <h3 className="text-sm font-medium text-slate-600 mb-2">출석 청년 ({attendances.length}명)</h3>
+        <button
+          type="button"
+          onClick={() => setAttendedOpen((v) => !v)}
+          className="cursor-pointer flex items-center gap-2 mb-2 group"
+        >
+          <h3 className="text-sm font-medium text-slate-700 group-hover:text-primary">출석 청년 ({attendances.length}명)</h3>
+          <svg className={`w-4 h-4 text-slate-400 group-hover:text-primary transition-transform duration-200 ${attendedOpen ? 'rotate-0' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
+        {attendedOpen && (
+        <>
         {/* 이름 검색 + 태그 출석 추가 */}
         <div className="mb-3 space-y-2">
           <input
@@ -366,57 +380,83 @@ export default function AttendanceDetail() {
             ))}
           </ul>
         )}
+        </>
+        )}
       </section>
 
       <section className="mb-6">
-        <h3 className="text-sm font-medium text-slate-600 mb-2">결석 청년 ({absentMembers.length}명)</h3>
-        {absentMembers.length === 0 ? (
-          <p className="text-slate-500 text-sm">결석한 청년이 없습니다.</p>
-        ) : (
-          <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            {absentMembers.map((m) => (
-              <li key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
-                <Link to={`/dashboard/members/${m.id}`} className="cursor-pointer text-slate-700 hover:text-primary">
-                  {m.name}
-                  {(absentNameCount[m.name] ?? 0) > 1 && (
-                    <span className="ml-1 text-xs text-slate-400">({getCohort(m.birth_date)}년생)</span>
-                  )}
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => handleAddSingle(m.id)}
-                  disabled={addLoading || pendingTagIds.has(m.id)}
-                  className="cursor-pointer text-xs text-primary hover:text-primary-dark disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {pendingTagIds.has(m.id) ? '대기 중' : '출석 추가'}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <button
+          type="button"
+          onClick={() => setAbsentOpen((v) => !v)}
+          className="cursor-pointer flex items-center gap-2 mb-2 group"
+        >
+          <h3 className="text-sm font-medium text-slate-700 group-hover:text-primary">결석 청년 ({absentMembers.length}명)</h3>
+          <svg className={`w-4 h-4 text-slate-400 group-hover:text-primary transition-transform duration-200 ${absentOpen ? 'rotate-0' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {absentOpen && (
+          <>
+            {absentMembers.length === 0 ? (
+              <p className="text-slate-500 text-sm">결석한 청년이 없습니다.</p>
+            ) : (
+              <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                {absentMembers.map((m) => (
+                  <li key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
+                    <Link to={`/dashboard/members/${m.id}`} className="cursor-pointer text-slate-700 hover:text-primary">
+                      {m.name}
+                      {(absentNameCount[m.name] ?? 0) > 1 && (
+                        <span className="ml-1 text-xs text-slate-400">({getCohort(m.birth_date)}년생)</span>
+                      )}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleAddSingle(m.id)}
+                      disabled={addLoading || pendingTagIds.has(m.id)}
+                      className="cursor-pointer text-xs text-primary hover:text-primary-dark disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {pendingTagIds.has(m.id) ? '대기 중' : '출석 추가'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </section>
 
       <section>
-        <h3 className="text-sm font-medium text-slate-600 mb-2">방문자</h3>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleVisitorDecrement}
-            disabled={visitorLoading || visitorCount <= 0}
-            className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
-          >
-            −
-          </button>
-          <span className="text-slate-800 font-semibold w-12 text-center">{visitorCount}명</span>
-          <button
-            type="button"
-            onClick={handleVisitorIncrement}
-            disabled={visitorLoading}
-            className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
-          >
-            +
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setVisitorOpen((v) => !v)}
+          className="cursor-pointer flex items-center gap-2 mb-2 group"
+        >
+          <h3 className="text-sm font-medium text-slate-700 group-hover:text-primary">방문자</h3>
+          <svg className={`w-4 h-4 text-slate-400 group-hover:text-primary transition-transform duration-200 ${visitorOpen ? 'rotate-0' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {visitorOpen && (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleVisitorDecrement}
+              disabled={visitorLoading || visitorCount <= 0}
+              className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
+            >
+              −
+            </button>
+            <span className="text-slate-800 font-semibold w-12 text-center">{visitorCount}명</span>
+            <button
+              type="button"
+              onClick={handleVisitorIncrement}
+              disabled={visitorLoading}
+              className="cursor-pointer w-8 h-8 rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-lg font-medium flex items-center justify-center"
+            >
+              +
+            </button>
+          </div>
+        )}
       </section>
     </div>
   )
