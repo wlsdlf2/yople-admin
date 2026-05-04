@@ -10,7 +10,12 @@ export default function DashboardLayout() {
   const [notAllowed, setNotAllowed] = useState(false)
   const [pendingApproval, setPendingApproval] = useState(false)
   const [userRole, setUserRole] = useState<'admin' | 'owner' | 'manager' | 'staff' | null>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  )
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  )
   const [sidebarHovered, setSidebarHovered] = useState(false)
 
   useEffect(() => {
@@ -40,6 +45,16 @@ export default function DashboardLayout() {
     }
     check()
   }, [navigate])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const update = () => {
+      setIsMobile(mq.matches)
+      if (mq.matches) setSidebarCollapsed(true)
+    }
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -99,10 +114,24 @@ export default function DashboardLayout() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((c) => !c)}
         onHoverChange={setSidebarHovered}
+        isMobile={isMobile}
+        onClose={() => setSidebarCollapsed(true)}
       />
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
+            {isMobile && (
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                className="cursor-pointer p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                aria-label="메뉴 열기"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
             <div className="h-8 w-8 rounded-full border-2 border-slate-200 flex-shrink-0 overflow-hidden bg-slate-50 flex items-center justify-center p-0.5">
               <img src={logo} alt="젊은백성" className="h-full w-full object-contain" />
             </div>

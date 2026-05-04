@@ -24,29 +24,41 @@ type NavbarProps = {
   collapsed: boolean
   onToggle: () => void
   onHoverChange: (hovered: boolean) => void
+  isMobile?: boolean
+  onClose?: () => void
 }
 
-export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarProps) {
+export function Navbar({ userRole, collapsed, onToggle, onHoverChange, isMobile = false, onClose }: NavbarProps) {
   const [hovered, setHovered] = useState(false)
   const canManageApprovals = userRole === 'admin' || userRole === 'owner'
   const canAccessSettings = userRole === 'admin' || userRole === 'owner' || userRole === 'manager'
   const canAccessPastoral = userRole === 'owner' || userRole === 'admin' || userRole === 'manager'
-  const isExpanded = !collapsed || hovered
+  const isExpanded = isMobile ? !collapsed : (!collapsed || hovered)
 
   const handleMouseEnter = () => {
-    if (collapsed) {
+    if (!isMobile && collapsed) {
       setHovered(true)
       onHoverChange(true)
     }
   }
   const handleMouseLeave = () => {
-    setHovered(false)
-    onHoverChange(false)
+    if (!isMobile) {
+      setHovered(false)
+      onHoverChange(false)
+    }
   }
 
   return (
+    <>
+    {isMobile && !collapsed && (
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+    )}
     <aside
-      className={`flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${isExpanded ? 'w-52' : 'w-10'}`}
+      className={
+        isMobile
+          ? `fixed inset-y-0 left-0 z-50 w-52 bg-white border-r border-slate-200 flex flex-col shadow-xl transition-transform duration-200 ${collapsed ? '-translate-x-full' : 'translate-x-0'}`
+          : `flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${isExpanded ? 'w-52' : 'w-10'}`
+      }
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -75,6 +87,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
             key={to}
             to={to}
             end={end}
+            onClick={isMobile ? onClose : undefined}
             className={({ isActive }) =>
               `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                 isActive
@@ -94,6 +107,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
               key={to}
               to={to}
               end={end}
+              onClick={isMobile ? onClose : undefined}
               className={({ isActive }) =>
                 `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
@@ -113,6 +127,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
               key={to}
               to={to}
               end={end}
+              onClick={isMobile ? onClose : undefined}
               className={({ isActive }) =>
                 `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
@@ -132,6 +147,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
               key={to}
               to={to}
               end={end}
+              onClick={isMobile ? onClose : undefined}
               className={({ isActive }) =>
                 `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
@@ -147,5 +163,6 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
           ))}
       </nav>
     </aside>
+    </>
   )
 }
