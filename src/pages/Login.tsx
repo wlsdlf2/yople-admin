@@ -66,15 +66,20 @@ export default function Login() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={rememberEmail}
-              onChange={(e) => setRememberEmail(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            아이디 저장
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberEmail}
+                onChange={(e) => setRememberEmail(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              아이디 저장
+            </label>
+            <Link to="/forgot-password" className="text-sm text-primary hover:text-primary-dark">
+              비밀번호 찾기
+            </Link>
+          </div>
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg py-2 px-3">{error}</p>
           )}
