@@ -38,6 +38,8 @@ export default function ForgotPassword() {
               입력하신 이메일로 비밀번호 재설정 링크를 보냈습니다.
               <br />
               이메일을 확인해 주세요.
+              <br /><br />
+              <span className="text-slate-400">링크는 발송 후 1시간 이내에 사용해 주세요.</span>
             </p>
             <Link to="/login" className="block text-sm text-primary hover:text-primary-dark">
               로그인으로 돌아가기

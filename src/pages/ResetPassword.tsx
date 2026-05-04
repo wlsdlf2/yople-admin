@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'ready' | 'expired'>('loading')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -12,6 +13,14 @@ export default function ResetPassword() {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    const urlError =
+      searchParams.get('error') ||
+      new URLSearchParams(window.location.hash.replace('#', '')).get('error')
+    if (urlError) {
+      setStatus('expired')
+      return
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setStatus('ready')
@@ -32,7 +41,7 @@ export default function ResetPassword() {
       clearTimeout(timer)
       subscription.unsubscribe()
     }
-  }, [])
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
