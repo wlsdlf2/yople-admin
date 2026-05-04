@@ -51,7 +51,7 @@ export default function MemberDetail() {
       if (allAtt && allAtt.length > 0) {
         const years = new Set<number>()
         for (const row of allAtt as { date: string }[]) {
-          years.add(new Date(row.date + 'Z').getFullYear())
+          years.add(new Date(row.date + 'T00:00:00Z').getFullYear())
         }
         const sorted = [currentYear, ...Array.from(years).filter((y) => y !== currentYear).sort((a, b) => b - a)]
         setAvailableYears(sorted)

@@ -14,7 +14,7 @@ type AttendanceRow = {
 type MemberOption = { id: string; name: string; birth_date?: string | null }
 
 function formatDateFull(dateStr: string) {
-  const d = new Date(dateStr + 'Z')
+  const d = new Date(dateStr + 'T00:00:00Z')
   return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 }
 

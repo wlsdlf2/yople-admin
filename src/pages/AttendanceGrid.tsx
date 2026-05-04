@@ -27,7 +27,7 @@ type PendingSync = {
 }
 
 function formatDateCol(dateStr: string) {
-  const d = new Date(dateStr + 'Z')
+  const d = new Date(dateStr + 'T00:00:00Z')
   return (d.getMonth() + 1) + '/' + d.getDate()
 }
 
