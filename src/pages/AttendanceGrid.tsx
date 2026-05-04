@@ -11,6 +11,12 @@ type Member = {
   is_new_member: boolean
 }
 
+type PastoralMember = {
+  id: string
+  name: string
+  role: string | null
+}
+
 type UploadResult = { inserted: number; skipped: number; notFound: number; parseErrors: string[]; duplicateErrors: string[] }
 
 type PendingSync = {
@@ -36,6 +42,8 @@ export default function AttendanceGrid() {
   const [gradeMap, setGradeMap] = useState<Map<string, 'A' | 'B' | 'C'>>(new Map())
   const [datesWithData, setDatesWithData] = useState<Set<string>>(new Set())
   const [visitorCountByDate, setVisitorCountByDate] = useState<Map<string, number>>(new Map())
+  const [pastoralTeam, setPastoralTeam] = useState<PastoralMember[]>([])
+  const [pastoralAttendedSet, setPastoralAttendedSet] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -138,11 +146,36 @@ export default function AttendanceGrid() {
           visitorCount.set(vv.date, vv.count)
         }
 
+        const [{ data: pastoralData, error: errP }, { data: pastoralAttData, error: errPA }] = await Promise.all([
+          supabase.from('pastoral_team').select('id, name, role').order('created_at'),
+          supabase
+            .from('pastoral_attendances')
+            .select('member_id, date')
+            .gte('date', start)
+            .lte('date', end),
+        ])
+        if (errP) {
+          setError(errP.message)
+          setLoading(false)
+          return
+        }
+        if (errPA) {
+          setError(errPA.message)
+          setLoading(false)
+          return
+        }
+        const pastoralAttended = new Set<string>()
+        for (const a of pastoralAttData ?? []) {
+          pastoralAttended.add(`${a.member_id}_${a.date}`)
+        }
+
         setMembers((memberData ?? []) as Member[])
         setAttendedSet(attended)
         setGradeMap(grades)
         setDatesWithData(withData)
         setVisitorCountByDate(visitorCount)
+        setPastoralTeam((pastoralData ?? []) as PastoralMember[])
+        setPastoralAttendedSet(pastoralAttended)
       } catch {
         setError('데이터를 불러오지 못했습니다.')
       } finally {
@@ -639,6 +672,63 @@ export default function AttendanceGrid() {
           </div>
         </div>
       )}
+      {/* 새가족 탭: 목회팀 출석 그리드 */}
+      {tab === 'new' && dates.length > 0 && pastoralTeam.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-slate-700 mb-3">목회팀 출석</h3>
+          <div className="overflow-x-auto">
+            <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
+                    직책
+                  </th>
+                  <th className="text-left p-2 sticky left-20 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
+                    이름
+                  </th>
+                  {dates.map((d) => (
+                    <th
+                      key={d}
+                      className="p-2 text-center min-w-[2.5rem] font-medium text-slate-700"
+                    >
+                      <Link
+                        to={`/dashboard/attendance/${d}`}
+                        className="block text-primary hover:text-primary-dark hover:underline"
+                      >
+                        {formatDateCol(d)}
+                      </Link>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pastoralTeam.map((pm) => (
+                  <tr key={pm.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                    <td className="p-2 text-slate-500 text-xs sticky left-0 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
+                      {pm.role ?? ''}
+                    </td>
+                    <td className="p-2 font-medium text-slate-800 sticky left-20 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
+                      {pm.name}
+                    </td>
+                    {dates.map((d) => (
+                      <td key={d} className="p-1 text-center">
+                        {!datesWithData.has(d) ? (
+                          <span className="text-slate-200">·</span>
+                        ) : pastoralAttendedSet.has(`${pm.id}_${d}`) ? (
+                          <span className="text-emerald-600 font-medium">O</span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* 연간 출석부 동기화 섹션 */}
       <details className="mt-6 rounded-xl border border-slate-200 bg-slate-50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 select-none">

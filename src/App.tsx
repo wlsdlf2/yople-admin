@@ -10,6 +10,7 @@ import MemberDetail from './pages/MemberDetail'
 import AbsentMembers from './pages/AbsentMembers'
 import PendingApprovals from './pages/PendingApprovals'
 import Settings from './pages/Settings'
+import PastoralTeamList from './pages/PastoralTeamList'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="members" element={<MemberList />} />
           <Route path="members/:id" element={<MemberDetail />} />
           <Route path="absent" element={<AbsentMembers />} />
+          <Route path="pastoral" element={<PastoralTeamList />} />
           <Route path="approvals" element={<PendingApprovals />} />
           <Route path="settings" element={<Settings />} />
         </Route>

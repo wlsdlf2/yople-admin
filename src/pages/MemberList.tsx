@@ -44,7 +44,8 @@ const emptyForm = {
 
 export default function MemberList() {
   const { userRole } = useOutletContext<{ userRole: 'admin' | 'owner' | 'manager' | 'staff' | null }>()
-  const canEdit = userRole !== 'staff'
+  const canEdit = true
+  const canDelete = userRole !== 'staff'
   const [list, setList] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -538,13 +539,15 @@ export default function MemberList() {
                     >
                       수정
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(m.id, m.name)}
-                      className="cursor-pointer text-sm text-red-600 hover:text-red-700"
-                    >
-                      삭제
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => remove(m.id, m.name)}
+                        className="cursor-pointer text-sm text-red-600 hover:text-red-700"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

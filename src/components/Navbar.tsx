@@ -7,6 +7,10 @@ const links = [
   { to: '/dashboard/members', end: false, label: '청년 명단' },
 ]
 
+const pastoralLinks = [
+  { to: '/dashboard/pastoral', end: false, label: '목회팀' },
+]
+
 const approvalLinks = [
   { to: '/dashboard/approvals', end: false, label: '회원가입 요청 수락' },
 ]
@@ -26,6 +30,7 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
   const [hovered, setHovered] = useState(false)
   const canManageApprovals = userRole === 'admin' || userRole === 'owner'
   const canAccessSettings = userRole === 'admin' || userRole === 'owner' || userRole === 'manager'
+  const canAccessPastoral = userRole === 'owner' || userRole === 'admin' || userRole === 'manager'
   const isExpanded = !collapsed || hovered
 
   const handleMouseEnter = () => {
@@ -83,6 +88,25 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange }: NavbarP
             </span>
           </NavLink>
         ))}
+        {canAccessPastoral &&
+          pastoralLinks.map(({ to, end, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 cursor-pointer'
+                }`
+              }
+            >
+              <span className={`transition-opacity duration-150 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
+                {label}
+              </span>
+            </NavLink>
+          ))}
         {canManageApprovals &&
           approvalLinks.map(({ to, end, label }) => (
             <NavLink
