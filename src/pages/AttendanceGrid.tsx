@@ -335,7 +335,7 @@ export default function AttendanceGrid() {
           .order('name'),
         supabase
           .from('attendances')
-          .select('member_id, date')
+          .select('member_id, date, created_at')
           .gte('date', start)
           .lte('date', end)
           .limit(100000),
@@ -348,7 +348,7 @@ export default function AttendanceGrid() {
         supabase.from('pastoral_team').select('id, name, role').order('created_at'),
         supabase
           .from('pastoral_attendances')
-          .select('member_id, date')
+          .select('member_id, date, created_at')
           .gte('date', start)
           .lte('date', end)
           .limit(100000),
@@ -360,19 +360,29 @@ export default function AttendanceGrid() {
       if (errPA) throw new Error(errPA.message)
 
       const set = new Set<string>()
-      for (const a of attData ?? []) set.add(`${a.member_id}_${a.date}`)
+      const gradeMap = new Map<string, 'A' | 'B' | 'C'>()
+      for (const a of attData ?? []) {
+        const rec = a as { member_id: string; date: string; created_at: string }
+        set.add(`${rec.member_id}_${rec.date}`)
+        gradeMap.set(`${rec.member_id}_${rec.date}`, getAttendanceGrade(rec.created_at))
+      }
       const visitorCountByDate = new Map<string, number>()
       for (const v of visitorData ?? []) {
         const rec = v as { date: string; count: number }
         visitorCountByDate.set(rec.date, rec.count)
       }
       const pastoralSet = new Set<string>()
-      for (const a of pastoralAttData ?? []) pastoralSet.add(`${a.member_id}_${a.date}`)
+      for (const a of pastoralAttData ?? []) {
+        const rec = a as { member_id: string; date: string; created_at: string }
+        pastoralSet.add(`${rec.member_id}_${rec.date}`)
+        gradeMap.set(`${rec.member_id}_${rec.date}`, getAttendanceGrade(rec.created_at))
+      }
 
       downloadYearlyAttendanceGrid(
         year,
         (memberData ?? []) as { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
         set,
+        gradeMap,
         visitorCountByDate,
         (pastoralData ?? []) as { id: string; name: string; role: string | null }[],
         pastoralSet

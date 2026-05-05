@@ -66,6 +66,7 @@ function buildNewMemberSheet(
   members: { id: string; name: string; birth_date: string | null }[],
   sundays: string[],
   attendanceSet: Set<string>,
+  gradeMap: Map<string, 'A' | 'B' | 'C'>,
   visitorCountByDate: Map<string, number>,
   pastoralTeam: PastoralMember[],
   pastoralAttendedSet: Set<string>
@@ -76,7 +77,7 @@ function buildNewMemberSheet(
     wsData.push([
       getCohort(m.birth_date),
       m.name,
-      ...sundays.map((d) => (attendanceSet.has(`${m.id}_${d}`) ? 'O' : '')),
+      ...sundays.map((d) => attendanceSet.has(`${m.id}_${d}`) ? (gradeMap.get(`${m.id}_${d}`) ?? 'O') : ''),
     ])
   }
   wsData.push([]) // 빈 행 1
@@ -95,7 +96,7 @@ function buildNewMemberSheet(
     wsData.push([
       pm.role ?? '',
       pm.name,
-      ...sundays.map((d) => (pastoralAttendedSet.has(`${pm.id}_${d}`) ? 'O' : '')),
+      ...sundays.map((d) => pastoralAttendedSet.has(`${pm.id}_${d}`) ? (gradeMap.get(`${pm.id}_${d}`) ?? 'O') : ''),
     ])
   }
 
@@ -132,6 +133,7 @@ function buildMainSheet(
   allMembers: { id: string }[],
   sundays: string[],
   attendanceSet: Set<string>,
+  gradeMap: Map<string, 'A' | 'B' | 'C'>,
   visitorCountByDate: Map<string, number>,
   pastoralTeam: PastoralMember[],
   pastoralAttendedSet: Set<string>
@@ -212,7 +214,7 @@ function buildMainSheet(
       getCohort(m.birth_date),
       m.name,
       m.district ?? '',
-      ...sundays.map(d => (attendanceSet.has(`${m.id}_${d}`) ? 'O' : '')),
+      ...sundays.map(d => attendanceSet.has(`${m.id}_${d}`) ? (gradeMap.get(`${m.id}_${d}`) ?? 'O') : ''),
     ]
     return row
   })
@@ -466,6 +468,7 @@ export function downloadYearlyAttendanceGrid(
   year: number,
   members: { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
   attendanceSet: Set<string>,
+  gradeMap: Map<string, 'A' | 'B' | 'C'>,
   visitorCountByDate: Map<string, number>,
   pastoralTeam: PastoralMember[],
   pastoralAttendedSet: Set<string>
@@ -481,10 +484,10 @@ export function downloadYearlyAttendanceGrid(
     String(today.getDate()).padStart(2, '0')
 
   const { ws: newMemberSheet } = buildNewMemberSheet(
-    newMembers, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
+    newMembers, sundays, attendanceSet, gradeMap, visitorCountByDate, pastoralTeam, pastoralAttendedSet
   )
   const mainSheet = buildMainSheet(
-    year, regular, members, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
+    year, regular, members, sundays, attendanceSet, gradeMap, visitorCountByDate, pastoralTeam, pastoralAttendedSet
   )
   const statsSheet = buildStatsSheet(
     year, members, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
@@ -590,7 +593,7 @@ export function parseYearlyAttendanceGrid(
           if (!name || duplicateNames.has(name)) continue
           const attendedDates: string[] = []
           for (let colIdx = 0; colIdx < allDates.length; colIdx++) {
-            if (String(row[DATE_START_COL + colIdx] ?? '').trim().toUpperCase() === 'O') {
+            if (['A', 'B', 'C', 'O'].includes(String(row[DATE_START_COL + colIdx] ?? '').trim().toUpperCase())) {
               attendedDates.push(allDates[colIdx])
             }
           }
