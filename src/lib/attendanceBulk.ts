@@ -1,8 +1,20 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { getSundaysInYear, getCohort } from './dateUtils'
 
 const TEMPLATE_HEADERS = ['날짜', '이름', '또래'] as const
 const TEMPLATE_SHEET_NAME = '출석이력'
+
+export const DISTRICTS = ['일반교구', '젊은백성', '결혼', '해외', '군입대', '장결자'] as const
+export type District = typeof DISTRICTS[number]
+
+const DISTRICT_COLORS: Record<string, string> = {
+  '일반교구': 'E36C09',
+  '젊은백성': 'FFC000',
+  '결혼':     'FF99CC',
+  '해외':     '92D050',
+  '군입대':   '4472C4',
+  '장결자':   'A6A6A6',
+}
 
 export type AttendanceRow = {
   date: string
@@ -43,16 +55,20 @@ export function downloadAttendanceTemplate(): void {
   XLSX.writeFile(wb, '출석이력_일괄업로드_양식.xlsx')
 }
 
+type PastoralMember = { id: string; name: string; role: string | null }
+
 /**
  * 새가족 시트 생성.
- * 구조: 1행 헤더 → 새가족 멤버 행 → (빈 행 1) → (빈 행 2) → 방문자 행
+ * 구조: 1행 헤더 → 새가족 멤버 행 → (빈 행 1) → (빈 행 2) → 방문자 행 → (빈 행) → 목회팀 헤더 → 목회팀 행
  * 반환값에 방문자 행의 Excel 행 번호(1-based)도 포함.
  */
 function buildNewMemberSheet(
   members: { id: string; name: string; birth_date: string | null }[],
   sundays: string[],
   attendanceSet: Set<string>,
-  visitorCountByDate: Map<string, number>
+  visitorCountByDate: Map<string, number>,
+  pastoralTeam: PastoralMember[],
+  pastoralAttendedSet: Set<string>
 ): { ws: XLSX.WorkSheet; visitorRow: number } {
   const headerRow = ['또래', '이름', ...sundays]
   const wsData: (string | number)[][] = [headerRow]
@@ -63,16 +79,25 @@ function buildNewMemberSheet(
       ...sundays.map((d) => (attendanceSet.has(`${m.id}_${d}`) ? 'O' : '')),
     ])
   }
-  // 빈 행 2개 (마지막 멤버 행으로부터 2행 밑 = 인덱스 N+2)
   wsData.push([]) // 빈 행 1
   wsData.push([]) // 빈 행 2
-  // 방문자 행
   const visitorDataRow: (string | number)[] = [
     '',
     '방문자',
     ...sundays.map((d) => visitorCountByDate.get(d) ?? 0),
   ]
   wsData.push(visitorDataRow)
+  wsData.push([]) // 빈 행
+
+  // 목회팀 섹션
+  wsData.push(['역할', '이름', ...sundays])
+  for (const pm of pastoralTeam) {
+    wsData.push([
+      pm.role ?? '',
+      pm.name,
+      ...sundays.map((d) => (pastoralAttendedSet.has(`${pm.id}_${d}`) ? 'O' : '')),
+    ])
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(wsData)
   for (let i = 0; i < sundays.length; i++) {
@@ -89,44 +114,361 @@ function buildNewMemberSheet(
 }
 
 /**
- * 전체 시트 생성.
- * 2행: 날짜별 총 출석수 = 전체 멤버(O) + 새가족 멤버(O) + 새가족 시트 방문자 수
+ * 전체 시트 생성 (신규 레이아웃).
+ *
+ * 행 구조 (0-indexed):
+ *  r=0  : 제목 (col 2~끝 병합)
+ *  r=1  : 범례 헤더 "구분" | "내용" (col 1, 2)
+ *  r=2~7: 교구별 범례 행 (col 1=교구명, col 2=색상 셀)
+ *  r=8  : 달 (col 0-2 병합 "달", col 3+는 월별 병합)
+ *  r=9  : 합계 (노랑 배경, col 0-2 병합, col 3+는 날짜별 합계)
+ *  r=10 : 날짜 (col 0-2 병합, col 3+는 일 숫자)
+ *  r=11 : 헤더 (또래, 이름, 교구, col 3+는 월별 병합 "세부사항")
+ *  r=12+: 청년 데이터 행
  */
 function buildMainSheet(
-  members: { id: string; name: string; birth_date: string | null }[],
+  year: number,
+  regularMembers: { id: string; name: string; birth_date: string | null; district: string | null }[],
+  allMembers: { id: string }[],
   sundays: string[],
-  attendanceSet: Set<string>
+  attendanceSet: Set<string>,
+  visitorCountByDate: Map<string, number>,
+  pastoralTeam: PastoralMember[],
+  pastoralAttendedSet: Set<string>
 ): XLSX.WorkSheet {
-  const headerRow = ['또래', '이름', ...sundays]
-  const totalRow = ['', '총 출석', ...sundays.map(() => '')]
-  const wsData: string[][] = [headerRow, totalRow]
-  for (const m of members) {
-    wsData.push([
+  // 월 그룹 계산
+  const monthMap = new Map<number, string[]>()
+  for (const d of sundays) {
+    const month = parseInt(d.slice(5, 7), 10)
+    if (!monthMap.has(month)) monthMap.set(month, [])
+    monthMap.get(month)!.push(d)
+  }
+  const monthGroups = [...monthMap.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([month, dates]) => ({ month, dates }))
+
+  // 날짜별 열 오프셋 (col 0=또래, 1=이름, 2=교구, 3+=날짜)
+  const dateColOffset = new Map<string, number>()
+  let cOff = 3
+  for (const { dates } of monthGroups) {
+    for (const d of dates) dateColOffset.set(d, cOff++)
+  }
+
+  // 합계 계산: 전체 청년(등록+새가족) + 방문자 + 목회팀
+  const totalByDate = new Map<string, number>()
+  for (const d of sundays) {
+    const mc = allMembers.filter(m => attendanceSet.has(`${m.id}_${d}`)).length
+    const vc = visitorCountByDate.get(d) ?? 0
+    const pc = pastoralTeam.filter(pm => pastoralAttendedSet.has(`${pm.id}_${d}`)).length
+    totalByDate.set(d, mc + vc + pc)
+  }
+
+  const cols = 3 + sundays.length
+  const emptyRow = () => Array<string | number>(cols).fill('')
+
+  // r=0: 제목
+  const titleRow = emptyRow()
+  titleRow[2] = `${year} 다드림예배 출석부`
+
+  // r=1: 범례 헤더
+  const legendHeaderRow = emptyRow()
+  legendHeaderRow[1] = '구분'
+  legendHeaderRow[2] = '내용'
+
+  // r=2~7: 교구 범례
+  const legendRows = DISTRICTS.map(name => {
+    const row = emptyRow()
+    row[1] = name
+    return row
+  })
+
+  // r=8: 달 행
+  const monthRow = emptyRow()
+  monthRow[0] = '달'
+  for (const { month, dates } of monthGroups) {
+    monthRow[dateColOffset.get(dates[0])!] = `${month}월`
+  }
+
+  // r=9: 합계 행
+  const totalRow = emptyRow()
+  totalRow[0] = '합계'
+  for (const d of sundays) totalRow[dateColOffset.get(d)!] = totalByDate.get(d) ?? 0
+
+  // r=10: 날짜 행
+  const dateRow = emptyRow()
+  dateRow[0] = '날짜'
+  for (const d of sundays) dateRow[dateColOffset.get(d)!] = parseInt(d.slice(8, 10), 10)
+
+  // r=11: 헤더 행
+  const headerRow = emptyRow()
+  headerRow[0] = '또래'
+  headerRow[1] = '이름'
+  headerRow[2] = '교구'
+  for (const { dates } of monthGroups) headerRow[dateColOffset.get(dates[0])!] = '세부사항'
+
+  // r=12+: 청년 데이터
+  const dataRows = regularMembers.map(m => {
+    const row: (string | number)[] = [
       getCohort(m.birth_date),
       m.name,
-      ...sundays.map((d) => (attendanceSet.has(`${m.id}_${d}`) ? 'O' : '')),
-    ])
-  }
+      m.district ?? '',
+      ...sundays.map(d => (attendanceSet.has(`${m.id}_${d}`) ? 'O' : '')),
+    ]
+    return row
+  })
+
+  const wsData = [
+    titleRow,
+    legendHeaderRow,
+    ...legendRows,
+    monthRow,
+    totalRow,
+    dateRow,
+    headerRow,
+    ...dataRows,
+  ]
+
   const ws = XLSX.utils.aoa_to_sheet(wsData)
-  for (let i = 0; i < sundays.length; i++) {
-    const col = XLSX.utils.encode_col(2 + i)
-    if (ws[`${col}1`]) ws[`${col}1`].t = 's'
-    // INDEX/MATCH로 새가족 시트의 "방문자" 행을 동적 참조 → 새가족 추가 시에도 수식 유효
-    ws[`${col}2`] = {
-      t: 'n',
-      f: `COUNTIF(${col}3:${col}9999,"O")+COUNTIF(새가족!${col}2:${col}9999,"O")+INDEX(새가족!${col}:${col},MATCH("방문자",새가족!B:B,0))`,
+
+  // 병합
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: 2 }, e: { r: 0, c: 2 + sundays.length - 1 } }, // 제목
+    { s: { r: 8, c: 0 }, e: { r: 8, c: 2 } },  // 달 라벨
+    { s: { r: 9, c: 0 }, e: { r: 9, c: 2 } },  // 합계 라벨
+    { s: { r: 10, c: 0 }, e: { r: 10, c: 2 } }, // 날짜 라벨
+  ]
+  for (const { dates } of monthGroups) {
+    if (dates.length > 1) {
+      const cStart = dateColOffset.get(dates[0])!
+      const cEnd = dateColOffset.get(dates[dates.length - 1])!
+      merges.push({ s: { r: 8, c: cStart }, e: { r: 8, c: cEnd } })  // 달 이름
+      merges.push({ s: { r: 11, c: cStart }, e: { r: 11, c: cEnd } }) // 세부사항
     }
   }
-  ws['!cols'] = [{ wch: 6 }, { wch: 12 }, ...sundays.map(() => ({ wch: 11 }))]
+  ws['!merges'] = merges
+
+  ws['!cols'] = [
+    { wch: 6 },
+    { wch: 12 },
+    { wch: 8 },
+    ...sundays.map(() => ({ wch: 5 })),
+  ]
+
+  // 스타일 적용
+  const center = { horizontal: 'center' as const, vertical: 'center' as const }
+  const left   = { horizontal: 'left'   as const, vertical: 'center' as const }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function styleCell(r: number, c: number, style: object) {
+    const addr = XLSX.utils.encode_cell({ r, c })
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+    ;(ws[addr] as any).s = style
+  }
+
+  // 제목 (r=0)
+  styleCell(0, 2, { font: { bold: true, sz: 16 }, alignment: center })
+
+  // 범례 헤더 (r=1)
+  styleCell(1, 1, { font: { bold: true }, alignment: center })
+  styleCell(1, 2, { font: { bold: true }, alignment: center })
+
+  // 교구 범례 (r=2~7)
+  DISTRICTS.forEach((name, i) => {
+    const r = 2 + i
+    const color = DISTRICT_COLORS[name]
+    styleCell(r, 1, { alignment: left })
+    styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } } })
+  })
+
+  // 달 행 (r=8)
+  styleCell(8, 0, { font: { bold: true }, alignment: center })
+  for (let i = 0; i < sundays.length; i++) {
+    styleCell(8, 3 + i, { font: { bold: true }, alignment: center })
+  }
+
+  // 합계 행 (r=9, 노랑)
+  const yellowFill = { patternType: 'solid' as const, fgColor: { rgb: 'FFFF00' } }
+  for (let c = 0; c < cols; c++) {
+    styleCell(9, c, { fill: yellowFill, font: { bold: true }, alignment: center })
+  }
+
+  // 날짜 행 (r=10)
+  styleCell(10, 0, { alignment: center })
+  for (let i = 0; i < sundays.length; i++) {
+    styleCell(10, 3 + i, { alignment: center })
+  }
+
+  // 헤더 행 (r=11)
+  for (let c = 0; c < cols; c++) {
+    styleCell(11, c, { font: { bold: true }, alignment: center })
+  }
+
+  // 데이터 행 (r=12+)
+  const DATA_START = 12
+  const grayFill = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
+  regularMembers.forEach((m, i) => {
+    const r = DATA_START + i
+    const district = m.district ?? ''
+    const color = DISTRICT_COLORS[district]
+    const isLongAbsent = district === '장결자'
+    const rowFill = isLongAbsent ? grayFill : undefined
+    const rowStyle = rowFill ? { fill: rowFill } : {}
+
+    styleCell(r, 0, { ...rowStyle, alignment: center })
+    styleCell(r, 1, { ...rowStyle, alignment: left })
+    if (color) {
+      styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } }, alignment: center })
+    } else {
+      styleCell(r, 2, { ...rowStyle, alignment: center })
+    }
+    for (let j = 0; j < sundays.length; j++) {
+      styleCell(r, 3 + j, { ...rowStyle, alignment: center })
+    }
+  })
+
   return ws
 }
 
-/** 연간 출석 현황 그리드 엑셀 다운로드 (시트1: 전체, 시트2: 새가족) */
+function sortCohortList(cohorts: string[]): string[] {
+  return [...cohorts].sort((a, b) => {
+    const na = parseInt(a, 10), nb = parseInt(b, 10)
+    const aOld = na >= 81, bOld = nb >= 81
+    if (aOld && bOld) return na - nb
+    if (!aOld && !bOld) return na - nb
+    return aOld ? -1 : 1
+  })
+}
+
+function buildStatsSheet(
+  year: number,
+  members: { id: string; birth_date: string | null }[],
+  sundays: string[],
+  attendanceSet: Set<string>,
+  visitorCountByDate: Map<string, number>,
+  pastoralTeam: PastoralMember[],
+  pastoralAttendedSet: Set<string>
+): XLSX.WorkSheet {
+  // 합계 계산 (목회팀 포함)
+  const totalByDate = new Map<string, number>()
+  for (const d of sundays) {
+    const mc = members.filter(m => attendanceSet.has(`${m.id}_${d}`)).length
+    const vc = visitorCountByDate.get(d) ?? 0
+    const pc = pastoralTeam.filter(pm => pastoralAttendedSet.has(`${pm.id}_${d}`)).length
+    totalByDate.set(d, mc + vc + pc)
+  }
+  const monthMap = new Map<number, string[]>()
+  for (const d of sundays) {
+    const month = parseInt(d.slice(5, 7), 10)
+    if (!monthMap.has(month)) monthMap.set(month, [])
+    monthMap.get(month)!.push(d)
+  }
+  const monthGroups = [...monthMap.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([month, mDates]) => ({
+      month,
+      dates: mDates,
+      avg: Math.round(mDates.reduce((s, d) => s + (totalByDate.get(d) ?? 0), 0) / mDates.length),
+    }))
+  const cohortSet = new Set<string>()
+  for (const m of members) {
+    if (!m.birth_date) continue
+    if (new Date(m.birth_date).getFullYear() > 1980) cohortSet.add(getCohort(m.birth_date))
+  }
+  const peerRows = ['80이상', ...sortCohortList([...cohortSet])]
+  const peerDateCount = new Map<string, Map<string, number>>()
+  for (const peer of peerRows) peerDateCount.set(peer, new Map())
+  for (const m of members) {
+    if (!m.birth_date) continue
+    const by = new Date(m.birth_date).getFullYear()
+    const peer = by <= 1980 ? '80이상' : getCohort(m.birth_date)
+    const peerMap = peerDateCount.get(peer)
+    if (!peerMap) continue
+    for (const d of sundays) {
+      if (attendanceSet.has(`${m.id}_${d}`)) peerMap.set(d, (peerMap.get(d) ?? 0) + 1)
+    }
+  }
+
+  const totalCols = sundays.length + 1
+  const headerRow: (string | number)[] = ['기준월']
+  const avgRow: (string | number)[] = ['월평균']
+  const peerHRow: (string | number)[] = ['또래']
+  for (const { month, dates: mDates, avg } of monthGroups) {
+    headerRow.push(`${month}월`, ...Array(mDates.length - 1).fill(''))
+    avgRow.push(avg, ...Array(mDates.length - 1).fill(''))
+    peerHRow.push('인원수', ...Array(mDates.length - 1).fill(''))
+  }
+  const dateRow: (string | number)[] = ['날짜', ...sundays.map(d => parseInt(d.slice(8, 10), 10))]
+  const totalRow: (string | number)[] = ['합계', ...sundays.map(d => totalByDate.get(d) ?? 0)]
+
+  const wsData: (string | number)[][] = [
+    [`${year}년 전체 출석 통계`, ...Array(sundays.length).fill('')],
+    headerRow,
+    avgRow,
+    dateRow,
+    totalRow,
+    peerHRow,
+    ...peerRows.map(peer => [peer, ...sundays.map(d => peerDateCount.get(peer)?.get(d) ?? 0)]),
+  ]
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } },
+  ]
+  let col = 1
+  for (const { dates: mDates } of monthGroups) {
+    if (mDates.length > 1) {
+      for (const r of [1, 2, 5]) {
+        merges.push({ s: { r, c: col }, e: { r, c: col + mDates.length - 1 } })
+      }
+    }
+    col += mDates.length
+  }
+  ws['!merges'] = merges
+
+  const PINK = 'F3DCDB'
+  const RED  = 'C0514d'
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function setCell(r: number, c: number, style: object) {
+    const addr = XLSX.utils.encode_cell({ r, c })
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+    ;(ws[addr] as any).s = style
+  }
+  function applyRow(r: number, labelStyle: object, dataStyle: object) {
+    for (let c = 0; c < totalCols; c++) setCell(r, c, c === 0 ? labelStyle : dataStyle)
+  }
+
+  const center = { horizontal: 'center' as const, vertical: 'center' as const }
+  const left   = { horizontal: 'left'   as const, vertical: 'center' as const }
+  const pink   = { patternType: 'solid' as const, fgColor: { rgb: PINK } }
+  const red    = { patternType: 'solid' as const, fgColor: { rgb: RED  } }
+  const gray   = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
+
+  setCell(0, 0, { font: { bold: true, sz: 14, color: { rgb: '1F3864' } }, alignment: center })
+  applyRow(1, { alignment: left   }, { alignment: center })
+  applyRow(2, { fill: pink, font: { bold: true }, alignment: left   },
+              { fill: pink, font: { bold: true }, alignment: center })
+  applyRow(4, { fill: red,  font: { bold: true }, alignment: left   },
+              { fill: red,  font: { bold: true }, alignment: center })
+  applyRow(5, { alignment: left   }, { alignment: center })
+  for (let r = 6; r < wsData.length; r++) {
+    applyRow(r, { fill: gray, alignment: left }, { alignment: center })
+  }
+
+  ws['!cols'] = [{ wch: 8 }, ...sundays.map(() => ({ wch: 5 }))]
+  ws['!rows'] = [{ hpt: 28 }, { hpt: 14.3 }]
+  return ws
+}
+
+/** 연간 출석 현황 그리드 엑셀 다운로드 (시트1: 전체 출석 통계, 시트2: 전체, 시트3: 새가족) */
 export function downloadYearlyAttendanceGrid(
   year: number,
-  members: { id: string; name: string; birth_date: string | null; is_new_member: boolean }[],
+  members: { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
   attendanceSet: Set<string>,
-  visitorCountByDate: Map<string, number>
+  visitorCountByDate: Map<string, number>,
+  pastoralTeam: PastoralMember[],
+  pastoralAttendedSet: Set<string>
 ): void {
   const sundays = getSundaysInYear(year)
   const regular = members.filter((m) => !m.is_new_member)
@@ -137,17 +479,29 @@ export function downloadYearlyAttendanceGrid(
     today.getFullYear() + '-' +
     String(today.getMonth() + 1).padStart(2, '0') + '-' +
     String(today.getDate()).padStart(2, '0')
+
   const { ws: newMemberSheet } = buildNewMemberSheet(
-    newMembers, sundays, attendanceSet, visitorCountByDate
+    newMembers, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
   )
-  const mainSheet = buildMainSheet(regular, sundays, attendanceSet)
+  const mainSheet = buildMainSheet(
+    year, regular, members, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
+  )
+  const statsSheet = buildStatsSheet(
+    year, members, sundays, attendanceSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet
+  )
   const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, statsSheet, '전체 출석 통계')
   XLSX.utils.book_append_sheet(wb, mainSheet, '전체')
   XLSX.utils.book_append_sheet(wb, newMemberSheet, '새가족')
   XLSX.writeFile(wb, `출석현황_${year}년_${dateStr}.xlsx`)
 }
 
-/** 연간 출석 현황 그리드 엑셀 파싱 */
+/**
+ * 연간 출석 현황 그리드 엑셀 파싱.
+ * "전체" 시트를 우선 탐색하고, 없으면 첫 번째 시트를 사용.
+ * 헤더 행은 col 0="또래", col 1="이름"인 행으로 자동 탐색.
+ * 날짜는 col 3+에서 읽음 (col 2는 교구).
+ */
 export function parseYearlyAttendanceGrid(
   file: File
 ): Promise<{ entries: YearlyGridEntry[]; allDates: string[]; errors: string[] }> {
@@ -161,12 +515,12 @@ export function parseYearlyAttendanceGrid(
           return
         }
         const wb = XLSX.read(data, { type: 'array' })
-        const firstSheet = wb.SheetNames[0]
-        if (!firstSheet) {
+        const sheetName = wb.SheetNames.find(n => n === '전체') ?? wb.SheetNames[0]
+        if (!sheetName) {
           resolve({ entries: [], allDates: [], errors: ['시트가 없습니다.'] })
           return
         }
-        const ws = wb.Sheets[firstSheet]
+        const ws = wb.Sheets[sheetName]
         const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
         const errors: string[] = []
         const allDates: string[] = []
@@ -177,13 +531,31 @@ export function parseYearlyAttendanceGrid(
           return
         }
 
-        // 헤더 행에서 날짜 추출 (col 2 이후)
-        const headerRow = raw[0] as unknown[]
-        for (let i = 2; i < headerRow.length; i++) {
+        // 헤더 행 탐색: col 0 = "또래", col 1 = "이름"
+        let headerRowIdx = -1
+        for (let ri = 0; ri < raw.length; ri++) {
+          const row = raw[ri] as unknown[]
+          if (
+            String(row[0] ?? '').trim() === '또래' &&
+            String(row[1] ?? '').trim() === '이름'
+          ) {
+            headerRowIdx = ri
+            break
+          }
+        }
+        if (headerRowIdx === -1) {
+          resolve({ entries, allDates, errors: ['헤더 행(또래/이름)을 찾을 수 없습니다.'] })
+          return
+        }
+
+        // 날짜 추출: col 3+ (col 2는 교구)
+        const headerRow = raw[headerRowIdx] as unknown[]
+        const DATE_START_COL = 3
+        for (let i = DATE_START_COL; i < headerRow.length; i++) {
           const d = normalizeDate(headerRow[i])
           if (d) {
             allDates.push(d)
-          } else {
+          } else if (String(headerRow[i] ?? '').trim()) {
             errors.push(`헤더 열 ${XLSX.utils.encode_col(i)}: 날짜 형식이 잘못되었습니다. (건너뜀)`)
           }
         }
@@ -195,7 +567,7 @@ export function parseYearlyAttendanceGrid(
 
         // 이름 중복 감지
         const nameCount = new Map<string, number[]>()
-        for (let rowIdx = 1; rowIdx < raw.length; rowIdx++) {
+        for (let rowIdx = headerRowIdx + 1; rowIdx < raw.length; rowIdx++) {
           const row = raw[rowIdx] as unknown[]
           const name = String(row[1] ?? '').trim()
           if (!name) continue
@@ -212,13 +584,13 @@ export function parseYearlyAttendanceGrid(
         }
 
         // 데이터 행 파싱
-        for (let rowIdx = 1; rowIdx < raw.length; rowIdx++) {
+        for (let rowIdx = headerRowIdx + 1; rowIdx < raw.length; rowIdx++) {
           const row = raw[rowIdx] as unknown[]
           const name = String(row[1] ?? '').trim()
           if (!name || duplicateNames.has(name)) continue
           const attendedDates: string[] = []
           for (let colIdx = 0; colIdx < allDates.length; colIdx++) {
-            if (String(row[2 + colIdx] ?? '').trim().toUpperCase() === 'O') {
+            if (String(row[DATE_START_COL + colIdx] ?? '').trim().toUpperCase() === 'O') {
               attendedDates.push(allDates[colIdx])
             }
           }

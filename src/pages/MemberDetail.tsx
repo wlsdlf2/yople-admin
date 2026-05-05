@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getCohort, getSundaysInYear, getAttendanceGrade } from '../lib/dateUtils'
+import { DISTRICTS } from '../lib/attendanceBulk'
 
 type Member = {
   id: string
@@ -11,6 +12,7 @@ type Member = {
   gender: '남' | '여' | null
   is_new_member: boolean
   memo: string | null
+  district: string | null
 }
 
 export default function MemberDetail() {
@@ -34,7 +36,7 @@ export default function MemberDetail() {
     const fetchMember = async () => {
       const { data, error: err } = await supabase
         .from('members')
-        .select('id, name, phone, birth_date, gender, is_new_member, memo')
+        .select('id, name, phone, birth_date, gender, is_new_member, memo, district')
         .eq('id', id)
         .single()
       if (err || !data) {
@@ -116,6 +118,17 @@ export default function MemberDetail() {
     setConfirmGraduate(false)
   }
 
+  const handleDistrictChange = async (value: string) => {
+    if (!id) return
+    const district = value || null
+    const { error: err } = await supabase
+      .from('members')
+      .update({ district })
+      .eq('id', id)
+    if (err) { setError(err.message); return }
+    setMember((m) => m ? { ...m, district } : m)
+  }
+
   if (loading) return <p className="text-slate-500">불러오는 중…</p>
   if (error || !member) return <p className="text-red-600 bg-red-50 rounded-lg p-3">{error ?? '청년을 찾을 수 없습니다.'}</p>
 
@@ -169,6 +182,19 @@ export default function MemberDetail() {
         </div>
         <p className="text-sm text-slate-500">{member.phone}</p>
         {member.memo && <p className="text-sm text-slate-400 mt-1">{member.memo}</p>}
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-slate-500">교구</span>
+          <select
+            value={member.district ?? ''}
+            onChange={(e) => handleDistrictChange(e.target.value)}
+            className="cursor-pointer rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700"
+          >
+            <option value="">미설정</option>
+            {DISTRICTS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
 
         {confirmRevert && (
           <div className="mt-3 pt-3 border-t border-slate-100">

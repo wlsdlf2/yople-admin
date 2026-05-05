@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { downloadAttendanceTemplate, parseAttendanceFile, downloadYearlyAttendanceGrid, parseYearlyAttendanceGrid } from '../lib/attendanceBulk'
@@ -9,6 +9,7 @@ type Member = {
   name: string
   birth_date: string | null
   is_new_member: boolean
+  district: string | null
 }
 
 type PastoralMember = {
@@ -47,7 +48,7 @@ export default function AttendanceGrid() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const [tab, setTab] = useState<'all' | 'new'>('all')
+  const [tab, setTab] = useState<'stats' | 'all' | 'new'>('all')
 
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'parsing' | 'uploading' | 'done' | 'error'>('idle')
   const [uploadMessage, setUploadMessage] = useState('')
@@ -97,7 +98,7 @@ export default function AttendanceGrid() {
       try {
         const { data: memberData, error: errM } = await supabase
           .from('members')
-          .select('id, name, birth_date, is_new_member')
+          .select('id, name, birth_date, is_new_member, district')
           .order('birth_date', { ascending: true, nullsFirst: false })
           .order('name')
 
@@ -185,7 +186,55 @@ export default function AttendanceGrid() {
     fetchData()
   }, [year, refreshTrigger])
 
-  const dates = getSundaysInYear(year)
+  const dates = useMemo(() => getSundaysInYear(year), [year])
+
+  const statsData = useMemo(() => {
+    const totalByDate = new Map<string, number>()
+    for (const d of dates) {
+      const mc = members.filter(m => attendedSet.has(`${m.id}_${d}`)).length
+      totalByDate.set(d, mc + (visitorCountByDate.get(d) ?? 0))
+    }
+    const monthMap = new Map<number, string[]>()
+    for (const d of dates) {
+      const month = parseInt(d.slice(5, 7), 10)
+      if (!monthMap.has(month)) monthMap.set(month, [])
+      monthMap.get(month)!.push(d)
+    }
+    const monthGroups = [...monthMap.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([month, mDates]) => ({
+        month,
+        dates: mDates,
+        avg: Math.round(mDates.reduce((s, d) => s + (totalByDate.get(d) ?? 0), 0) / mDates.length),
+      }))
+    const cohortSet = new Set<string>()
+    for (const m of members) {
+      if (!m.birth_date) continue
+      const by = new Date(m.birth_date).getFullYear()
+      if (by > 1980) cohortSet.add(getCohort(m.birth_date))
+    }
+    const sortedCohorts = [...cohortSet].sort((a, b) => {
+      const na = parseInt(a, 10), nb = parseInt(b, 10)
+      const aOld = na >= 81, bOld = nb >= 81
+      if (aOld && bOld) return na - nb
+      if (!aOld && !bOld) return na - nb
+      return aOld ? -1 : 1
+    })
+    const peerRows = ['80이상', ...sortedCohorts]
+    const peerDateCount = new Map<string, Map<string, number>>()
+    for (const peer of peerRows) peerDateCount.set(peer, new Map())
+    for (const m of members) {
+      if (!m.birth_date) continue
+      const by = new Date(m.birth_date).getFullYear()
+      const peer = by <= 1980 ? '80이상' : getCohort(m.birth_date)
+      const peerMap = peerDateCount.get(peer)
+      if (!peerMap) continue
+      for (const d of dates) {
+        if (attendedSet.has(`${m.id}_${d}`)) peerMap.set(d, (peerMap.get(d) ?? 0) + 1)
+      }
+    }
+    return { totalByDate, monthGroups, peerRows, peerDateCount }
+  }, [dates, members, attendedSet, visitorCountByDate])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -270,29 +319,46 @@ export default function AttendanceGrid() {
     setDownloadLoading(true)
     setDownloadError(null)
     try {
-      const [{ data: memberData, error: errM }, { data: attData, error: errA }, { data: visitorData, error: errV }] =
-        await Promise.all([
-          supabase
-            .from('members')
-            .select('id, name, birth_date, is_new_member')
-            .order('birth_date', { ascending: true, nullsFirst: false })
-            .order('name'),
-          supabase
-            .from('attendances')
-            .select('member_id, date')
-            .gte('date', `${year}-01-01`)
-            .lte('date', `${year}-12-31`)
-            .limit(100000),
-          supabase
-            .from('visitors')
-            .select('date, count')
-            .gte('date', `${year}-01-01`)
-            .lte('date', `${year}-12-31`)
-            .limit(100000),
-        ])
+      const start = `${year}-01-01`
+      const end = `${year}-12-31`
+      const [
+        { data: memberData, error: errM },
+        { data: attData, error: errA },
+        { data: visitorData, error: errV },
+        { data: pastoralData, error: errP },
+        { data: pastoralAttData, error: errPA },
+      ] = await Promise.all([
+        supabase
+          .from('members')
+          .select('id, name, birth_date, is_new_member, district')
+          .order('birth_date', { ascending: true, nullsFirst: false })
+          .order('name'),
+        supabase
+          .from('attendances')
+          .select('member_id, date')
+          .gte('date', start)
+          .lte('date', end)
+          .limit(100000),
+        supabase
+          .from('visitors')
+          .select('date, count')
+          .gte('date', start)
+          .lte('date', end)
+          .limit(100000),
+        supabase.from('pastoral_team').select('id, name, role').order('created_at'),
+        supabase
+          .from('pastoral_attendances')
+          .select('member_id, date')
+          .gte('date', start)
+          .lte('date', end)
+          .limit(100000),
+      ])
       if (errM) throw new Error(errM.message)
       if (errA) throw new Error(errA.message)
       if (errV) throw new Error(errV.message)
+      if (errP) throw new Error(errP.message)
+      if (errPA) throw new Error(errPA.message)
+
       const set = new Set<string>()
       for (const a of attData ?? []) set.add(`${a.member_id}_${a.date}`)
       const visitorCountByDate = new Map<string, number>()
@@ -300,11 +366,16 @@ export default function AttendanceGrid() {
         const rec = v as { date: string; count: number }
         visitorCountByDate.set(rec.date, rec.count)
       }
+      const pastoralSet = new Set<string>()
+      for (const a of pastoralAttData ?? []) pastoralSet.add(`${a.member_id}_${a.date}`)
+
       downloadYearlyAttendanceGrid(
         year,
-        (memberData ?? []) as { id: string; name: string; birth_date: string | null; is_new_member: boolean }[],
+        (memberData ?? []) as { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
         set,
-        visitorCountByDate
+        visitorCountByDate,
+        (pastoralData ?? []) as { id: string; name: string; role: string | null }[],
+        pastoralSet
       )
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : '다운로드 실패')
@@ -458,7 +529,7 @@ export default function AttendanceGrid() {
       )}
 
       <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {(['all', 'new'] as const).map((t) => (
+        {(['stats', 'all', 'new'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -469,7 +540,7 @@ export default function AttendanceGrid() {
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            {t === 'all' ? '전체' : '새가족'}
+            {t === 'stats' ? '전체 출석 통계' : t === 'all' ? '전체' : '새가족'}
           </button>
         ))}
       </div>
@@ -537,9 +608,91 @@ export default function AttendanceGrid() {
         </div>
       </details>
 
-      {dates.length === 0 ? (
+      {tab === 'stats' && (
+        dates.length === 0 ? (
+          <p className="text-slate-600">이 해에는 주일이 없습니다.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80">
+                  <th className="sticky left-0 z-20 bg-slate-50/80 border-r border-slate-200 p-2 text-left font-semibold text-emerald-700 min-w-[5rem] whitespace-nowrap">
+                    기준월
+                  </th>
+                  {statsData.monthGroups.map(({ month, dates: mDates }) => (
+                    <th key={month} colSpan={mDates.length} className="p-2 text-center border-l border-slate-200 font-semibold text-emerald-700">
+                      {month}월
+                    </th>
+                  ))}
+                </tr>
+                <tr className="border-b-2 border-slate-200 bg-slate-50/80">
+                  <td className="sticky left-0 z-20 bg-slate-50/80 border-r border-slate-200 p-2 text-left font-medium text-emerald-600 min-w-[5rem] whitespace-nowrap">
+                    월 평균
+                  </td>
+                  {statsData.monthGroups.map(({ month, avg, dates: mDates }) => (
+                    <td key={month} colSpan={mDates.length} className="p-2 text-center border-l border-slate-200 font-bold text-emerald-700">
+                      {avg}
+                    </td>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-slate-200 bg-slate-50/80">
+                  <td className="p-2 sticky left-0 z-10 bg-slate-50/80 border-r border-slate-200 font-medium text-slate-500 whitespace-nowrap">
+                    날짜
+                  </td>
+                  {dates.map((d) => (
+                    <td key={d} className="p-1 text-center text-slate-500 min-w-[2.5rem]">
+                      {parseInt(d.slice(8, 10), 10)}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b-2 border-slate-200 bg-amber-50">
+                  <td className="p-2 sticky left-0 z-10 bg-amber-50 border-r border-slate-200 font-semibold text-amber-800 whitespace-nowrap">
+                    합계
+                  </td>
+                  {dates.map((d) => (
+                    <td key={d} className="p-1 text-center">
+                      <span className="text-xs font-semibold text-amber-800">
+                        {statsData.totalByDate.get(d) ?? 0}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-200 bg-slate-100">
+                  <td className="p-2 sticky left-0 z-10 bg-slate-100 border-r border-slate-200 font-medium text-slate-400 whitespace-nowrap">
+                    또래
+                  </td>
+                  {statsData.monthGroups.map(({ month, dates: mDates }) => (
+                    <td key={month} colSpan={mDates.length} className="p-1 text-center border-l border-slate-200 text-xs text-slate-400">
+                      인원수
+                    </td>
+                  ))}
+                </tr>
+                {statsData.peerRows.map((peer) => (
+                  <tr key={peer} className="border-b border-slate-100 hover:bg-emerald-100/40">
+                    <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
+                      {peer}
+                    </td>
+                    {dates.map((d) => (
+                      <td key={d} className="p-1 text-center">
+                        <span className="text-xs text-slate-600">
+                          {statsData.peerDateCount.get(peer)?.get(d) ?? 0}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {tab !== 'stats' && dates.length === 0 && (
         <p className="text-slate-600">이 해에는 주일이 없습니다.</p>
-      ) : (
+      )}
+      {tab !== 'stats' && dates.length > 0 && (
         <div className="overflow-x-auto">
           <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
             <thead>
