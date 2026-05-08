@@ -732,6 +732,123 @@ function buildStatsSheet(
   return ws
 }
 
+/**
+ * xlsx-js-style은 freeze panes를 지원하지 않으므로, 출력된 xlsx 바이너리를
+ * ZIP 구조 단위로 직접 파싱·재조립하여 각 시트에 freeze pane XML을 주입한다.
+ * sheetFreezes: 시트 순서(1-based sheet 번호 순)에 대응하는 ySplit 값 배열.
+ */
+function patchXlsxFreezePanes(binary: string, sheetFreezes: number[]): string {
+  const r16 = (b: string, o: number) => b.charCodeAt(o) | (b.charCodeAt(o + 1) << 8)
+  const r32 = (b: string, o: number) =>
+    ((b.charCodeAt(o) | (b.charCodeAt(o+1)<<8) | (b.charCodeAt(o+2)<<16) | (b.charCodeAt(o+3)<<24)) >>> 0)
+  const w32 = (v: number) =>
+    String.fromCharCode(v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF)
+
+  // CRC-32 lookup table
+  const CRC_T = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+    CRC_T[i] = c
+  }
+  const crc32 = (s: string) => {
+    let c = 0xFFFFFFFF
+    for (let i = 0; i < s.length; i++) c = (c >>> 8) ^ CRC_T[(c ^ s.charCodeAt(i)) & 0xFF]
+    return (c ^ 0xFFFFFFFF) >>> 0
+  }
+
+  // End of Central Directory
+  const eocdPos = binary.lastIndexOf('PK\x05\x06')
+  if (eocdPos < 0) return binary
+  const totalEntries = r16(binary, eocdPos + 8)
+  const cdOffset    = r32(binary, eocdPos + 16)
+
+  // Parse Central Directory
+  type Entry = { name: string; lfhOff: number; compSize: number; cdOff: number; cdLen: number; newContent?: string }
+  const entries: Entry[] = []
+  let cdPos = cdOffset
+  for (let i = 0; i < totalEntries; i++) {
+    if (binary.slice(cdPos, cdPos + 4) !== 'PK\x01\x02') break
+    const fnLen = r16(binary, cdPos + 28), exLen = r16(binary, cdPos + 30), cmLen = r16(binary, cdPos + 32)
+    entries.push({
+      name: binary.slice(cdPos + 46, cdPos + 46 + fnLen),
+      lfhOff: r32(binary, cdPos + 42),
+      compSize: r32(binary, cdPos + 20),
+      cdOff: cdPos, cdLen: 46 + fnLen + exLen + cmLen,
+    })
+    cdPos += 46 + fnLen + exLen + cmLen
+  }
+
+  // Freeze pane XML
+  const SHEET_VIEW = '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+  const freezeXml = (ySplit: number) => {
+    const tl = `A${ySplit + 1}`
+    return (
+      `<sheetViews><sheetView workbookViewId="0">` +
+      `<pane ySplit="${ySplit}" topLeftCell="${tl}" activePane="bottomLeft" state="frozen"/>` +
+      `<selection pane="bottomLeft"/></sheetView></sheetViews>`
+    )
+  }
+
+  // Patch matching sheet files (sheetN.xml → sheetFreezes[N-1])
+  for (const e of entries) {
+    const m = e.name.match(/^xl\/worksheets\/sheet(\d+)\.xml$/)
+    if (!m) continue
+    const idx = parseInt(m[1]) - 1
+    if (idx >= sheetFreezes.length) continue
+    const fnLen = r16(binary, e.lfhOff + 26), exLen = r16(binary, e.lfhOff + 28)
+    const dataStart = e.lfhOff + 30 + fnLen + exLen
+    const old = binary.slice(dataStart, dataStart + e.compSize)
+    const patched = old.replace(SHEET_VIEW, freezeXml(sheetFreezes[idx]))
+    if (patched !== old) e.newContent = patched
+  }
+
+  if (!entries.some(e => e.newContent !== undefined)) return binary
+
+  // Rebuild local file sections (sorted by original LFH offset)
+  const sorted = [...entries].sort((a, b) => a.lfhOff - b.lfhOff)
+  const newOffMap = new Map<string, number>()
+  let newBin = ''
+
+  for (const e of sorted) {
+    newOffMap.set(e.name, newBin.length)
+    const fnLen = r16(binary, e.lfhOff + 26), exLen = r16(binary, e.lfhOff + 28)
+    const hdrLen = 30 + fnLen + exLen, dataStart = e.lfhOff + hdrLen
+    if (e.newContent !== undefined) {
+      const nc = e.newContent, newCrc = crc32(nc), newSz = nc.length
+      let hdr = binary.slice(e.lfhOff, e.lfhOff + hdrLen)
+      hdr = hdr.slice(0, 14) + w32(newCrc) + w32(newSz) + w32(newSz) + hdr.slice(26)
+      newBin += hdr + nc
+    } else {
+      newBin += binary.slice(e.lfhOff, dataStart + e.compSize)
+    }
+  }
+
+  // Rebuild Central Directory (original CD order)
+  const newCdStart = newBin.length
+  let newCd = ''
+  for (const e of entries) {
+    const newOff = newOffMap.get(e.name) ?? e.lfhOff
+    let cd = binary.slice(e.cdOff, e.cdOff + e.cdLen)
+    if (e.newContent !== undefined) {
+      const nc = e.newContent, newCrc = crc32(nc), newSz = nc.length
+      cd = cd.slice(0, 16) + w32(newCrc) + w32(newSz) + w32(newSz) + cd.slice(28, 42) + w32(newOff) + cd.slice(46)
+    } else {
+      cd = cd.slice(0, 42) + w32(newOff) + cd.slice(46)
+    }
+    newCd += cd
+  }
+
+  // Rebuild End of Central Directory
+  const newEocd =
+    binary.slice(eocdPos, eocdPos + 12) +  // sig + disk info + entry counts
+    w32(newCd.length) +                      // new CD size
+    w32(newCdStart) +                        // new CD offset
+    binary.slice(eocdPos + 20)               // comment length + comment
+
+  return newBin + newCd + newEocd
+}
+
 /** 연간 출석 현황 그리드 엑셀 다운로드 (시트1: 전체 출석 통계, 시트2: 전체, 시트3: 새가족) */
 export function downloadYearlyAttendanceGrid(
   year: number,
@@ -765,7 +882,23 @@ export function downloadYearlyAttendanceGrid(
   XLSX.utils.book_append_sheet(wb, statsSheet, '전체 출석 통계')
   XLSX.utils.book_append_sheet(wb, mainSheet, '전체')
   XLSX.utils.book_append_sheet(wb, newMemberSheet, '새가족-방문')
-  XLSX.writeFile(wb, `출석현황_${year}년_${dateStr}.xlsx`)
+
+  // ZIP 구조를 파싱·재조립해서 각 시트에 freeze pane XML을 주입
+  // 순서: sheet1=전체 출석 통계(ySplit=5), sheet2=전체(ySplit=11), sheet3=새가족-방문(ySplit=6)
+  const binary = patchXlsxFreezePanes(
+    XLSX.write(wb, { type: 'binary', bookType: 'xlsx' }),
+    [5, 11, 6]
+  )
+
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 0xFF
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `출석현황_${year}년_${dateStr}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 /**
