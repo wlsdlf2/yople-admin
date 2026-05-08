@@ -8,12 +8,12 @@ export const DISTRICTS = ['일반교구', '젊은백성', '결혼', '해외', '�
 export type District = typeof DISTRICTS[number]
 
 const DISTRICT_COLORS: Record<string, string> = {
-  '일반교구': 'E36C09',
-  '젊은백성': 'FFC000',
-  '결혼':     'FF99CC',
-  '해외':     '92D050',
-  '군입대':   '4472C4',
-  '장결자':   'A6A6A6',
+  '일반교구': 'FFBF00',
+  '젊은백성': '00B0F0',
+  '결혼':     'FFCCFF',
+  '해외':     '92CDDC',
+  '군입대':   'CCFFCC',
+  '장결자':   'DDDDDD',
 }
 
 export type AttendanceRow = {
@@ -58,9 +58,28 @@ export function downloadAttendanceTemplate(): void {
 type PastoralMember = { id: string; name: string; role: string | null }
 
 /**
- * 새가족 시트 생성.
- * 구조: 1행 헤더 → 새가족 멤버 행 → (빈 행 1) → (빈 행 2) → 방문자 행 → (빈 행) → 목회팀 헤더 → 목회팀 행
- * 반환값에 방문자 행의 Excel 행 번호(1-based)도 포함.
+ * 새가족 시트 생성 (새가족-방문 탭).
+ * 구조:
+ *  r=0        제목
+ *  r=1~3      빈 행
+ *  r=4        달 행 (새가족)
+ *  r=5        헤더 (또래 / 이름 / 일 숫자)
+ *  r=6~5+N    새가족 데이터 N행
+ *  r=6+N      총합 (빨간 폰트)
+ *  r=7~10+N   빈 행 4개
+ *  r=11+N     달 행 (목회팀)
+ *  r=12+N     헤더
+ *  r=13+N~12+N+P  목회팀 P행 (c=0 "목회팀" 수직 병합)
+ *  r=13+N+P   총합 (빨간 폰트)
+ *  r=14~17+N+P 빈 행 4개
+ *  r=18+N+P   "미등록 or 방문" 박스 (2행 병합)
+ *  r=19+N+P   박스 2번째 행
+ *  r=20+N+P   빈 행
+ *  r=21+N+P   달 행 (방문자)
+ *  r=22+N+P   일 숫자 행
+ *  r=23+N+P   방문자 수 데이터
+ *  r=24+N+P   빈 행
+ *  r=25+N+P   테두리 셀 행
  */
 function buildNewMemberSheet(
   members: { id: string; name: string; birth_date: string | null }[],
@@ -70,48 +89,295 @@ function buildNewMemberSheet(
   visitorCountByDate: Map<string, number>,
   pastoralTeam: PastoralMember[],
   pastoralAttendedSet: Set<string>
-): { ws: XLSX.WorkSheet; visitorRow: number } {
-  const headerRow = ['또래', '이름', ...sundays]
-  const wsData: (string | number)[][] = [headerRow]
-  for (const m of members) {
-    wsData.push([
-      getCohort(m.birth_date),
-      m.name,
-      ...sundays.map((d) => attendanceSet.has(`${m.id}_${d}`) ? (gradeMap.get(`${m.id}_${d}`) ?? 'O') : ''),
-    ])
-  }
-  wsData.push([]) // 빈 행 1
-  wsData.push([]) // 빈 행 2
-  const visitorDataRow: (string | number)[] = [
-    '',
-    '방문자',
-    ...sundays.map((d) => visitorCountByDate.get(d) ?? 0),
-  ]
-  wsData.push(visitorDataRow)
-  wsData.push([]) // 빈 행
+): XLSX.WorkSheet {
+  const year = sundays.length > 0 ? parseInt(sundays[0].slice(0, 4), 10) : new Date().getFullYear()
+  const N = members.length
+  const P = pastoralTeam.length
 
-  // 목회팀 섹션
-  wsData.push(['역할', '이름', ...sundays])
-  for (const pm of pastoralTeam) {
-    wsData.push([
-      pm.role ?? '',
-      pm.name,
-      ...sundays.map((d) => pastoralAttendedSet.has(`${pm.id}_${d}`) ? (gradeMap.get(`${pm.id}_${d}`) ?? 'O') : ''),
-    ])
+  // 월 그룹 및 날짜별 컬럼 오프셋 계산 (c=0=또래, c=1=이름, c=2+=날짜)
+  const monthMap = new Map<number, string[]>()
+  for (const d of sundays) {
+    const month = parseInt(d.slice(5, 7), 10)
+    if (!monthMap.has(month)) monthMap.set(month, [])
+    monthMap.get(month)!.push(d)
   }
+  const monthGroups = [...monthMap.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([month, dates]) => ({ month, dates }))
+
+  const dateColOffset = new Map<string, number>()
+  let cOff = 2
+  for (const { dates } of monthGroups) {
+    for (const d of dates) dateColOffset.set(d, cOff++)
+  }
+
+  const totalCols = 2 + sundays.length
+  const emptyRow = (): (string | number)[] => Array(totalCols).fill('')
+
+  function makeDalRow(): (string | number)[] {
+    const row = emptyRow()
+    row[0] = '달'
+    for (const { month, dates } of monthGroups) {
+      row[dateColOffset.get(dates[0])!] = `${month}월`
+    }
+    return row
+  }
+
+  const wsData: (string | number)[][] = []
+
+  // r=0: 제목
+  const titleRow = emptyRow()
+  titleRow[0] = `${year} 다드림예배 출석부`
+  wsData.push(titleRow)
+
+  // r=1~3: 빈 행
+  wsData.push(emptyRow(), emptyRow(), emptyRow())
+
+  // r=4: 달 행 (새가족)
+  wsData.push(makeDalRow())
+
+  // r=5: 헤더
+  const nmHeaderRow = emptyRow()
+  nmHeaderRow[0] = '또래'
+  nmHeaderRow[1] = '이름'
+  for (const d of sundays) nmHeaderRow[dateColOffset.get(d)!] = parseInt(d.slice(8, 10), 10)
+  wsData.push(nmHeaderRow)
+
+  // r=6~5+N: 새가족 데이터
+  for (const m of members) {
+    const row = emptyRow()
+    row[0] = getCohort(m.birth_date)
+    row[1] = m.name
+    for (const d of sundays) {
+      row[dateColOffset.get(d)!] = attendanceSet.has(`${m.id}_${d}`) ? (gradeMap.get(`${m.id}_${d}`) ?? 'O') : ''
+    }
+    wsData.push(row)
+  }
+
+  // r=6+N: 새가족 총합
+  const nmTotalRow = emptyRow()
+  nmTotalRow[0] = '총합'
+  for (const d of sundays) {
+    nmTotalRow[dateColOffset.get(d)!] = members.filter(m => attendanceSet.has(`${m.id}_${d}`)).length
+  }
+  wsData.push(nmTotalRow)
+
+  // r=7~10+N: 빈 행 4개
+  wsData.push(emptyRow(), emptyRow(), emptyRow(), emptyRow())
+
+  // r=11+N: 달 행 (목회팀)
+  wsData.push(makeDalRow())
+
+  // r=12+N: 목회팀 헤더
+  const ptHeaderRow = emptyRow()
+  ptHeaderRow[1] = '이름'
+  for (const d of sundays) ptHeaderRow[dateColOffset.get(d)!] = parseInt(d.slice(8, 10), 10)
+  wsData.push(ptHeaderRow)
+
+  // r=13+N~12+N+P: 목회팀 데이터 (c=0은 "목회팀" 병합용, 빈 값 유지)
+  for (const pm of pastoralTeam) {
+    const row = emptyRow()
+    row[1] = `${pm.name}${pm.role ? ' ' + pm.role : ''}`
+    for (const d of sundays) {
+      row[dateColOffset.get(d)!] = pastoralAttendedSet.has(`${pm.id}_${d}`) ? (gradeMap.get(`${pm.id}_${d}`) ?? 'O') : ''
+    }
+    wsData.push(row)
+  }
+
+  // r=13+N+P: 목회팀 총합
+  const ptTotalRow = emptyRow()
+  ptTotalRow[0] = '총합'
+  for (const d of sundays) {
+    ptTotalRow[dateColOffset.get(d)!] = pastoralTeam.filter(pm => pastoralAttendedSet.has(`${pm.id}_${d}`)).length
+  }
+  wsData.push(ptTotalRow)
+
+  // r=14~17+N+P: 빈 행 4개
+  wsData.push(emptyRow(), emptyRow(), emptyRow(), emptyRow())
+
+  // r=18+N+P: "미등록 or 방문" 박스 (1번째 행)
+  const miRow1 = emptyRow()
+  miRow1[1] = '미등록 or 방문 (새가족첫방문)'
+  wsData.push(miRow1)
+
+  // r=19+N+P: 박스 2번째 행
+  wsData.push(emptyRow())
+
+  // r=20+N+P: 빈 행
+  wsData.push(emptyRow())
+
+  // r=21+N+P: 달 행 (방문자)
+  wsData.push(makeDalRow())
+
+  // r=22+N+P: 일 숫자 행
+  const visDateRow = emptyRow()
+  for (const d of sundays) visDateRow[dateColOffset.get(d)!] = parseInt(d.slice(8, 10), 10)
+  wsData.push(visDateRow)
+
+  // r=23+N+P: 방문자 수 데이터
+  const visDataRow = emptyRow()
+  for (const d of sundays) visDataRow[dateColOffset.get(d)!] = visitorCountByDate.get(d) ?? 0
+  wsData.push(visDataRow)
+
+  // r=24+N+P: 빈 행
+  wsData.push(emptyRow())
+
+  // r=25+N+P: 테두리 셀 행
+  wsData.push(emptyRow())
 
   const ws = XLSX.utils.aoa_to_sheet(wsData)
-  for (let i = 0; i < sundays.length; i++) {
-    const cellAddr = XLSX.utils.encode_cell({ r: 0, c: 2 + i })
-    if (ws[cellAddr]) ws[cellAddr].t = 's'
+
+  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, ...sundays.map(() => ({ wch: 5 }))]
+
+  // ── 병합 ──────────────────────────────────────────────────────────────────
+  const LAST_COL = totalCols - 1
+  const ROW_TITLE     = 0
+  const ROW_NM_DAL    = 4
+  const ROW_NM_TOTAL  = 6 + N
+  const ROW_PT_DAL    = 11 + N
+  const ROW_PT_DATA   = 13 + N
+  const ROW_PT_TOTAL  = 13 + N + P
+  const ROW_MI_BOX    = 18 + N + P
+  const ROW_MI_BOX2   = 19 + N + P
+  const ROW_VIS_DAL   = 21 + N + P
+  const ROW_LAST      = 25 + N + P
+
+  const merges: XLSX.Range[] = [
+    // 제목
+    { s: { r: ROW_TITLE, c: 0 }, e: { r: ROW_TITLE, c: LAST_COL } },
+    // 달 라벨 (c=0-1)
+    { s: { r: ROW_NM_DAL, c: 0 }, e: { r: ROW_NM_DAL, c: 1 } },
+    { s: { r: ROW_PT_DAL, c: 0 }, e: { r: ROW_PT_DAL, c: 1 } },
+    { s: { r: ROW_VIS_DAL, c: 0 }, e: { r: ROW_VIS_DAL, c: 1 } },
+    // 총합 라벨 (c=0-1)
+    { s: { r: ROW_NM_TOTAL, c: 0 }, e: { r: ROW_NM_TOTAL, c: 1 } },
+    { s: { r: ROW_PT_TOTAL, c: 0 }, e: { r: ROW_PT_TOTAL, c: 1 } },
+    // "미등록 or 방문" 박스 (2행 × c=1-5)
+    { s: { r: ROW_MI_BOX, c: 1 }, e: { r: ROW_MI_BOX2, c: 5 } },
+    // 목회팀 수직 병합 (P > 1일 때)
+    ...(P > 1 ? [{ s: { r: ROW_PT_DATA, c: 0 }, e: { r: ROW_PT_DATA + P - 1, c: 0 } }] : []),
+  ]
+
+  // 월 그룹 병합 (3개 달 행)
+  for (const { dates } of monthGroups) {
+    if (dates.length > 1) {
+      const cStart = dateColOffset.get(dates[0])!
+      const cEnd   = dateColOffset.get(dates[dates.length - 1])!
+      merges.push({ s: { r: ROW_NM_DAL,  c: cStart }, e: { r: ROW_NM_DAL,  c: cEnd } })
+      merges.push({ s: { r: ROW_PT_DAL,  c: cStart }, e: { r: ROW_PT_DAL,  c: cEnd } })
+      merges.push({ s: { r: ROW_VIS_DAL, c: cStart }, e: { r: ROW_VIS_DAL, c: cEnd } })
+    }
   }
-  ws['!cols'] = [{ wch: 6 }, { wch: 12 }, ...sundays.map(() => ({ wch: 11 }))]
 
-  // 방문자 행: wsData index = 1(header) + members.length + 2(빈행) = members.length + 3
-  // Excel 1-based row = members.length + 4
-  const visitorRow = members.length + 4
+  ws['!merges'] = merges
 
-  return { ws, visitorRow }
+  // ── 스타일 ────────────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function styleCell(r: number, c: number, style: object) {
+    const addr = XLSX.utils.encode_cell({ r, c })
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+    ;(ws[addr] as any).s = style
+  }
+
+  const center     = { horizontal: 'center' as const, vertical: 'center' as const }
+  const left       = { horizontal: 'left'   as const, vertical: 'center' as const }
+  const redFont    = { color: { rgb: 'FF0000' } }
+  const thinBorder = { style: 'thin' as const, color: { rgb: '000000' } }
+  const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
+  const headerFill = { patternType: 'solid' as const, fgColor: { rgb: 'DAEEF3' } }
+
+  // 제목
+  styleCell(ROW_TITLE, 0, { font: { bold: true, sz: 16 }, alignment: center })
+
+  // ── 새가족 섹션 ──────────────────────────────────────────────────────────
+
+  // 달 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_NM_DAL, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 헤더 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(5, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 새가족 데이터 행 — 테두리
+  for (let i = 0; i < N; i++) {
+    const r = 6 + i
+    styleCell(r, 0, { border: allBorders, alignment: center })
+    styleCell(r, 1, { border: allBorders, alignment: left })
+    for (let j = 0; j < sundays.length; j++) styleCell(r, 2 + j, { border: allBorders, alignment: center })
+  }
+
+  // 새가족 총합 — 테두리 + 빨간 폰트
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_NM_TOTAL, c, { border: allBorders, font: { bold: true, ...redFont }, alignment: center })
+  }
+
+  // ── 목회팀 섹션 ──────────────────────────────────────────────────────────
+
+  // 달 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_PT_DAL, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 목회팀 헤더 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_PT_DAL + 1, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // "목회팀" 수직 병합 첫 셀 값 및 스타일
+  if (P > 0) {
+    const addr = XLSX.utils.encode_cell({ r: ROW_PT_DATA, c: 0 })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(ws[addr] as any) = { t: 's', v: '목회팀', s: { border: allBorders, font: { bold: true }, alignment: center } }
+  }
+
+  // 목회팀 데이터 행 — 테두리
+  for (let i = 0; i < P; i++) {
+    const r = ROW_PT_DATA + i
+    if (i > 0) styleCell(r, 0, { border: allBorders, alignment: center })
+    styleCell(r, 1, { border: allBorders, alignment: left })
+    for (let j = 0; j < sundays.length; j++) styleCell(r, 2 + j, { border: allBorders, alignment: center })
+  }
+
+  // 목회팀 총합 — 테두리 + 빨간 폰트
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_PT_TOTAL, c, { border: allBorders, font: { bold: true, ...redFont }, alignment: center })
+  }
+
+  // "미등록 or 방문" 박스
+  for (let r = ROW_MI_BOX; r <= ROW_MI_BOX2; r++) {
+    for (let c = 1; c <= 5; c++) {
+      styleCell(r, c, {
+        border: allBorders,
+        alignment: center,
+        ...(r === ROW_MI_BOX && c === 1 ? { font: { bold: true } } : {}),
+      })
+    }
+  }
+
+  // ── 방문자 섹션 ──────────────────────────────────────────────────────────
+
+  // 달 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_VIS_DAL, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 일 숫자 행 — 배경색 + 테두리 + bold
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_VIS_DAL + 1, c, { fill: headerFill, border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 방문자 데이터 행 — 테두리
+  for (let c = 0; c < totalCols; c++) {
+    styleCell(ROW_VIS_DAL + 2, c, { border: allBorders, alignment: center })
+  }
+
+  // 마지막 테두리 셀 (c=14, column O)
+  styleCell(ROW_LAST, 14, { border: allBorders })
+
+  return ws
 }
 
 /**
@@ -257,8 +523,10 @@ function buildMainSheet(
   ]
 
   // 스타일 적용
-  const center = { horizontal: 'center' as const, vertical: 'center' as const }
-  const left   = { horizontal: 'left'   as const, vertical: 'center' as const }
+  const center     = { horizontal: 'center' as const, vertical: 'center' as const }
+  const left       = { horizontal: 'left'   as const, vertical: 'center' as const }
+  const thinBorder = { style: 'thin' as const, color: { rgb: '000000' } }
+  const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function styleCell(r: number, c: number, style: object) {
@@ -282,30 +550,28 @@ function buildMainSheet(
     styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } } })
   })
 
-  // 달 행 (r=8)
-  styleCell(8, 0, { font: { bold: true }, alignment: center })
-  for (let i = 0; i < sundays.length; i++) {
-    styleCell(8, 3 + i, { font: { bold: true }, alignment: center })
+  // 달 행 (r=8) — 테두리
+  for (let c = 0; c < cols; c++) {
+    styleCell(8, c, { border: allBorders, font: { bold: true }, alignment: center })
   }
 
-  // 합계 행 (r=9, 노랑)
+  // 합계 행 (r=9, 노랑) — 테두리
   const yellowFill = { patternType: 'solid' as const, fgColor: { rgb: 'FFFF00' } }
   for (let c = 0; c < cols; c++) {
-    styleCell(9, c, { fill: yellowFill, font: { bold: true }, alignment: center })
+    styleCell(9, c, { fill: yellowFill, border: allBorders, font: { bold: true }, alignment: center })
   }
 
-  // 날짜 행 (r=10)
-  styleCell(10, 0, { alignment: center })
-  for (let i = 0; i < sundays.length; i++) {
-    styleCell(10, 3 + i, { alignment: center })
-  }
-
-  // 헤더 행 (r=11)
+  // 날짜 행 (r=10) — 테두리
   for (let c = 0; c < cols; c++) {
-    styleCell(11, c, { font: { bold: true }, alignment: center })
+    styleCell(10, c, { border: allBorders, alignment: center })
   }
 
-  // 데이터 행 (r=12+)
+  // 헤더 행 (r=11) — 테두리
+  for (let c = 0; c < cols; c++) {
+    styleCell(11, c, { border: allBorders, font: { bold: true }, alignment: center })
+  }
+
+  // 데이터 행 (r=12+) — 테두리
   const DATA_START = 12
   const grayFill = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
   regularMembers.forEach((m, i) => {
@@ -316,15 +582,15 @@ function buildMainSheet(
     const rowFill = isLongAbsent ? grayFill : undefined
     const rowStyle = rowFill ? { fill: rowFill } : {}
 
-    styleCell(r, 0, { ...rowStyle, alignment: center })
-    styleCell(r, 1, { ...rowStyle, alignment: left })
+    styleCell(r, 0, { ...rowStyle, border: allBorders, alignment: center })
+    styleCell(r, 1, { ...rowStyle, border: allBorders, alignment: left })
     if (color) {
-      styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } }, alignment: center })
+      styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } }, border: allBorders, alignment: center })
     } else {
-      styleCell(r, 2, { ...rowStyle, alignment: center })
+      styleCell(r, 2, { ...rowStyle, border: allBorders, alignment: center })
     }
     for (let j = 0; j < sundays.length; j++) {
-      styleCell(r, 3 + j, { ...rowStyle, alignment: center })
+      styleCell(r, 3 + j, { ...rowStyle, border: allBorders, alignment: center })
     }
   })
 
@@ -441,21 +707,24 @@ function buildStatsSheet(
     for (let c = 0; c < totalCols; c++) setCell(r, c, c === 0 ? labelStyle : dataStyle)
   }
 
-  const center = { horizontal: 'center' as const, vertical: 'center' as const }
-  const left   = { horizontal: 'left'   as const, vertical: 'center' as const }
-  const pink   = { patternType: 'solid' as const, fgColor: { rgb: PINK } }
-  const red    = { patternType: 'solid' as const, fgColor: { rgb: RED  } }
-  const gray   = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
+  const center     = { horizontal: 'center' as const, vertical: 'center' as const }
+  const left       = { horizontal: 'left'   as const, vertical: 'center' as const }
+  const pink       = { patternType: 'solid' as const, fgColor: { rgb: PINK } }
+  const red        = { patternType: 'solid' as const, fgColor: { rgb: RED  } }
+  const gray       = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
+  const thinBorder = { style: 'thin' as const, color: { rgb: '000000' } }
+  const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
 
   setCell(0, 0, { font: { bold: true, sz: 14, color: { rgb: '1F3864' } }, alignment: center })
-  applyRow(1, { alignment: left   }, { alignment: center })
-  applyRow(2, { fill: pink, font: { bold: true }, alignment: left   },
-              { fill: pink, font: { bold: true }, alignment: center })
-  applyRow(4, { fill: red,  font: { bold: true }, alignment: left   },
-              { fill: red,  font: { bold: true }, alignment: center })
-  applyRow(5, { alignment: left   }, { alignment: center })
+  applyRow(1, { border: allBorders, alignment: left   }, { border: allBorders, alignment: center })
+  applyRow(2, { fill: pink, border: allBorders, font: { bold: true }, alignment: left   },
+              { fill: pink, border: allBorders, font: { bold: true }, alignment: center })
+  applyRow(3, { border: allBorders, alignment: left   }, { border: allBorders, alignment: center })
+  applyRow(4, { fill: red,  border: allBorders, font: { bold: true }, alignment: left   },
+              { fill: red,  border: allBorders, font: { bold: true }, alignment: center })
+  applyRow(5, { border: allBorders, alignment: left   }, { border: allBorders, alignment: center })
   for (let r = 6; r < wsData.length; r++) {
-    applyRow(r, { fill: gray, alignment: left }, { alignment: center })
+    applyRow(r, { fill: gray, border: allBorders, alignment: left }, { border: allBorders, alignment: center })
   }
 
   ws['!cols'] = [{ wch: 8 }, ...sundays.map(() => ({ wch: 5 }))]
@@ -483,7 +752,7 @@ export function downloadYearlyAttendanceGrid(
     String(today.getMonth() + 1).padStart(2, '0') + '-' +
     String(today.getDate()).padStart(2, '0')
 
-  const { ws: newMemberSheet } = buildNewMemberSheet(
+  const newMemberSheet = buildNewMemberSheet(
     newMembers, sundays, attendanceSet, gradeMap, visitorCountByDate, pastoralTeam, pastoralAttendedSet
   )
   const mainSheet = buildMainSheet(
@@ -495,7 +764,7 @@ export function downloadYearlyAttendanceGrid(
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, statsSheet, '전체 출석 통계')
   XLSX.utils.book_append_sheet(wb, mainSheet, '전체')
-  XLSX.utils.book_append_sheet(wb, newMemberSheet, '새가족')
+  XLSX.utils.book_append_sheet(wb, newMemberSheet, '새가족-방문')
   XLSX.writeFile(wb, `출석현황_${year}년_${dateStr}.xlsx`)
 }
 

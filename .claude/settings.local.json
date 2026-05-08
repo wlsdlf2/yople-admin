@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "PowerShell(Get-ChildItem \"C:\\\\yople-attendance-system\" -File | Where-Object {$_.Extension -match \"\\\\.\\(md|sql|json\\)$\"})"
     ]
   }
 }
