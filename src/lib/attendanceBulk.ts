@@ -434,6 +434,13 @@ function buildMainSheet(
   const cols = 3 + sundays.length
   const emptyRow = () => Array<string | number>(cols).fill('')
 
+  const LEGEND_COUNT = DISTRICTS.length
+  const ROW_MONTH  = 2 + LEGEND_COUNT
+  const ROW_TOTAL  = 3 + LEGEND_COUNT
+  const ROW_DATE   = 4 + LEGEND_COUNT
+  const ROW_HEADER = 5 + LEGEND_COUNT
+  const DATA_START = 6 + LEGEND_COUNT
+
   // r=0: 제목
   const titleRow = emptyRow()
   titleRow[2] = `${year} 다드림예배 출석부`
@@ -501,16 +508,16 @@ function buildMainSheet(
   // 병합
   const merges: XLSX.Range[] = [
     { s: { r: 0, c: 2 }, e: { r: 0, c: 2 + sundays.length - 1 } }, // 제목
-    { s: { r: 8, c: 0 }, e: { r: 8, c: 2 } },  // 달 라벨
-    { s: { r: 9, c: 0 }, e: { r: 9, c: 2 } },  // 합계 라벨
-    { s: { r: 10, c: 0 }, e: { r: 10, c: 2 } }, // 날짜 라벨
+    { s: { r: ROW_MONTH,  c: 0 }, e: { r: ROW_MONTH,  c: 2 } },
+    { s: { r: ROW_TOTAL,  c: 0 }, e: { r: ROW_TOTAL,  c: 2 } },
+    { s: { r: ROW_DATE,   c: 0 }, e: { r: ROW_DATE,   c: 2 } },
   ]
   for (const { dates } of monthGroups) {
     if (dates.length > 1) {
       const cStart = dateColOffset.get(dates[0])!
       const cEnd = dateColOffset.get(dates[dates.length - 1])!
-      merges.push({ s: { r: 8, c: cStart }, e: { r: 8, c: cEnd } })  // 달 이름
-      merges.push({ s: { r: 11, c: cStart }, e: { r: 11, c: cEnd } }) // 세부사항
+      merges.push({ s: { r: ROW_MONTH,  c: cStart }, e: { r: ROW_MONTH,  c: cEnd } })
+      merges.push({ s: { r: ROW_HEADER, c: cStart }, e: { r: ROW_HEADER, c: cEnd } })
     }
   }
   ws['!merges'] = merges
@@ -550,29 +557,28 @@ function buildMainSheet(
     styleCell(r, 2, { fill: { patternType: 'solid' as const, fgColor: { rgb: color } } })
   })
 
-  // 달 행 (r=8) — 테두리
+  // 달 행 — 테두리
   for (let c = 0; c < cols; c++) {
-    styleCell(8, c, { border: allBorders, font: { bold: true }, alignment: center })
+    styleCell(ROW_MONTH, c, { border: allBorders, font: { bold: true }, alignment: center })
   }
 
-  // 합계 행 (r=9, 노랑) — 테두리
+  // 합계 행 (노랑) — 테두리
   const yellowFill = { patternType: 'solid' as const, fgColor: { rgb: 'FFFF00' } }
   for (let c = 0; c < cols; c++) {
-    styleCell(9, c, { fill: yellowFill, border: allBorders, font: { bold: true }, alignment: center })
+    styleCell(ROW_TOTAL, c, { fill: yellowFill, border: allBorders, font: { bold: true }, alignment: center })
   }
 
-  // 날짜 행 (r=10) — 테두리
+  // 날짜 행 — 테두리
   for (let c = 0; c < cols; c++) {
-    styleCell(10, c, { border: allBorders, alignment: center })
+    styleCell(ROW_DATE, c, { border: allBorders, alignment: center })
   }
 
-  // 헤더 행 (r=11) — 테두리
+  // 헤더 행 — 테두리
   for (let c = 0; c < cols; c++) {
-    styleCell(11, c, { border: allBorders, font: { bold: true }, alignment: center })
+    styleCell(ROW_HEADER, c, { border: allBorders, font: { bold: true }, alignment: center })
   }
 
-  // 데이터 행 (r=12+) — 테두리
-  const DATA_START = 12
+  // 데이터 행 — 테두리
   const grayFill = { patternType: 'solid' as const, fgColor: { rgb: 'D9D9D9' } }
   regularMembers.forEach((m, i) => {
     const r = DATA_START + i
@@ -887,7 +893,7 @@ export function downloadYearlyAttendanceGrid(
   // 순서: sheet1=전체 출석 통계(ySplit=5), sheet2=전체(ySplit=11), sheet3=새가족-방문(ySplit=6)
   const binary = patchXlsxFreezePanes(
     XLSX.write(wb, { type: 'binary', bookType: 'xlsx' }),
-    [5, 11, 6]
+    [5, 6 + DISTRICTS.length, 6]
   )
 
   const bytes = new Uint8Array(binary.length)
