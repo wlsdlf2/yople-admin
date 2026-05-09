@@ -183,7 +183,7 @@ export default function MemberDetail() {
         <p className="text-sm text-slate-500">{member.phone}</p>
         {member.memo && <p className="text-sm text-slate-400 mt-1">{member.memo}</p>}
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-sm text-slate-500">교구</span>
+          <span className="text-sm text-slate-500">구분</span>
           <select
             value={member.district ?? ''}
             onChange={(e) => handleDistrictChange(e.target.value)}

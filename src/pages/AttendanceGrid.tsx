@@ -703,142 +703,155 @@ export default function AttendanceGrid() {
         <p className="text-slate-600">이 해에는 주일이 없습니다.</p>
       )}
       {tab !== 'stats' && dates.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[3rem]">
-                  또래
-                </th>
-                <th className="text-left p-2 sticky left-12 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
-                  이름
-                </th>
-                {dates.map((d) => (
-                  <th
-                    key={d}
-                    className="p-2 text-center border-b border-slate-200 min-w-[2.5rem] font-medium text-slate-700"
-                  >
-                    <Link
-                      to={`/dashboard/attendance/${d}`}
-                      className="block text-primary hover:text-primary-dark hover:underline"
-                    >
-                      {formatDateCol(d)}
-                    </Link>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tab === 'all' && (
-                <tr className="border-b border-slate-200 bg-slate-50/80">
-                  <td className="p-2 sticky left-0 z-10 bg-slate-50/80 border-r border-slate-200" />
-                  <td className="p-2 text-xs font-semibold text-slate-500 sticky left-12 z-10 bg-slate-50/80 border-r border-slate-200 whitespace-nowrap">
-                    총 출석
-                  </td>
-                  {dates.map((d) => (
-                    <td key={d} className="p-1 text-center">
-                      {datesWithData.has(d) ? (
-                        <span className="text-xs font-semibold text-slate-600">
-                          {members.filter((m) => attendedSet.has(`${m.id}_${d}`)).length
-                            + (visitorCountByDate.get(d) ?? 0)}
-                        </span>
-                      ) : null}
-                    </td>
+        <div>
+          <h3 className="text-base font-semibold text-slate-700 mb-3">새가족 출석</h3>
+          {members.filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member).length === 0 ? (
+            <p className="py-8 text-center text-slate-400 text-sm">
+              {tab === 'all' ? '등록된 청년이 없습니다.' : '등록된 새가족이 없습니다.'}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[3rem]">
+                      또래
+                    </th>
+                    <th className="text-left p-2 sticky left-12 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
+                      이름
+                    </th>
+                    {dates.map((d) => (
+                      <th
+                        key={d}
+                        className="p-2 text-center border-b border-slate-200 min-w-[2.5rem] font-medium text-slate-700"
+                      >
+                        <Link
+                          to={`/dashboard/attendance/${d}`}
+                          className="block text-primary hover:text-primary-dark hover:underline"
+                        >
+                          {formatDateCol(d)}
+                        </Link>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tab === 'all' && (
+                    <tr className="border-b border-slate-200 bg-slate-50/80">
+                      <td className="p-2 sticky left-0 z-10 bg-slate-50/80 border-r border-slate-200" />
+                      <td className="p-2 text-xs font-semibold text-slate-500 sticky left-12 z-10 bg-slate-50/80 border-r border-slate-200 whitespace-nowrap">
+                        총 출석
+                      </td>
+                      {dates.map((d) => (
+                        <td key={d} className="p-1 text-center">
+                          {datesWithData.has(d) ? (
+                            <span className="text-xs font-semibold text-slate-600">
+                              {members.filter((m) => attendedSet.has(`${m.id}_${d}`)).length
+                                + (visitorCountByDate.get(d) ?? 0)}
+                            </span>
+                          ) : null}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                  {members.filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member).map((m) => (
+                    <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
+                        {getCohort(m.birth_date)}
+                      </td>
+                      <td className="p-2 font-medium text-slate-800 sticky left-12 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
+                        <Link
+                          to={`/dashboard/members/${m.id}`}
+                          className="block hover:text-primary"
+                        >
+                          {m.is_new_member && (
+                            <span className="text-amber-600 text-xs mr-1">N</span>
+                          )}
+                          {m.name}
+                        </Link>
+                      </td>
+                      {dates.map((d) => (
+                        <td key={d} className="p-1 text-center">
+                          {!datesWithData.has(d) ? (
+                            <span className="text-slate-200">·</span>
+                          ) : attendedSet.has(`${m.id}_${d}`) ? (
+                            (() => {
+                              const grade = gradeMap.get(`${m.id}_${d}`) ?? 'A'
+                              const cls = grade === 'A' ? 'text-emerald-600' : grade === 'B' ? 'text-amber-500' : 'text-red-500'
+                              return <span className={`${cls} font-medium`}>{grade}</span>
+                            })()
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              )}
-              {members.filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member).map((m) => (
-                <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                  <td className="p-2 text-slate-500 sticky left-0 z-10 bg-white border-r border-slate-100">
-                    {getCohort(m.birth_date)}
-                  </td>
-                  <td className="p-2 font-medium text-slate-800 sticky left-12 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
-                    <Link
-                      to={`/dashboard/members/${m.id}`}
-                      className="block hover:text-primary"
-                    >
-                      {m.is_new_member && (
-                        <span className="text-amber-600 text-xs mr-1">N</span>
-                      )}
-                      {m.name}
-                    </Link>
-                  </td>
-                  {dates.map((d) => (
-                    <td key={d} className="p-1 text-center">
-                      {!datesWithData.has(d) ? (
-                        <span className="text-slate-200">·</span>
-                      ) : attendedSet.has(`${m.id}_${d}`) ? (
-                        (() => {
-                          const grade = gradeMap.get(`${m.id}_${d}`) ?? 'A'
-                          const cls = grade === 'A' ? 'text-emerald-600' : grade === 'B' ? 'text-amber-500' : 'text-red-500'
-                          return <span className={`${cls} font-medium`}>{grade}</span>
-                        })()
-                      ) : (
-                        <span className="text-slate-300">-</span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* 새가족 탭: 목회팀 출석 그리드 */}
-      {tab === 'new' && dates.length > 0 && pastoralTeam.length > 0 && (
+      {tab === 'new' && (
         <div className="mt-6">
           <h3 className="text-base font-semibold text-slate-700 mb-3">목회팀 출석</h3>
-          <div className="overflow-x-auto">
-            <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
-                    직책
-                  </th>
-                  <th className="text-left p-2 sticky left-20 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
-                    이름
-                  </th>
-                  {dates.map((d) => (
-                    <th
-                      key={d}
-                      className="p-2 text-center min-w-[2.5rem] font-medium text-slate-700"
-                    >
-                      <Link
-                        to={`/dashboard/attendance/${d}`}
-                        className="block text-primary hover:text-primary-dark hover:underline"
-                      >
-                        {formatDateCol(d)}
-                      </Link>
+          {pastoralTeam.length === 0 ? (
+            <p className="py-8 text-center text-slate-400 text-sm">등록된 목회팀원이 없습니다.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="border-collapse bg-white rounded-xl border border-slate-200 shadow-sm text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="text-left p-2 sticky left-0 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
+                      직책
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pastoralTeam.map((pm) => (
-                  <tr key={pm.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                    <td className="p-2 text-slate-500 text-xs sticky left-0 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
-                      {pm.role ?? ''}
-                    </td>
-                    <td className="p-2 font-medium text-slate-800 sticky left-20 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
-                      {pm.name}
-                    </td>
+                    <th className="text-left p-2 sticky left-20 z-20 bg-slate-50 border-r border-slate-200 min-w-[5rem]">
+                      이름
+                    </th>
                     {dates.map((d) => (
-                      <td key={d} className="p-1 text-center">
-                        {!datesWithData.has(d) ? (
-                          <span className="text-slate-200">·</span>
-                        ) : pastoralAttendedSet.has(`${pm.id}_${d}`) ? (
-                          <span className="text-emerald-600 font-medium">O</span>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
+                      <th
+                        key={d}
+                        className="p-2 text-center min-w-[2.5rem] font-medium text-slate-700"
+                      >
+                        <Link
+                          to={`/dashboard/attendance/${d}`}
+                          className="block text-primary hover:text-primary-dark hover:underline"
+                        >
+                          {formatDateCol(d)}
+                        </Link>
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pastoralTeam.map((pm) => (
+                    <tr key={pm.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="p-2 text-slate-500 text-xs sticky left-0 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
+                        {pm.role ?? ''}
+                      </td>
+                      <td className="p-2 font-medium text-slate-800 sticky left-20 z-10 bg-white border-r border-slate-100 whitespace-nowrap">
+                        {pm.name}
+                      </td>
+                      {dates.map((d) => (
+                        <td key={d} className="p-1 text-center">
+                          {!datesWithData.has(d) ? (
+                            <span className="text-slate-200">·</span>
+                          ) : pastoralAttendedSet.has(`${pm.id}_${d}`) ? (
+                            <span className="text-emerald-600 font-medium">O</span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
       {/* 새가족 탭: 방문자 출석 수 그리드 */}

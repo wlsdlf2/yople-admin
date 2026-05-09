@@ -4,12 +4,12 @@ import { getSundaysInYear, getCohort } from './dateUtils'
 const TEMPLATE_HEADERS = ['날짜', '이름', '또래'] as const
 const TEMPLATE_SHEET_NAME = '출석이력'
 
-export const DISTRICTS = ['일반교구', '젊은백성', '결혼', '해외', '군입대', '장결자'] as const
+export const DISTRICTS = ['결혼', '해외', '군입대', '장결자'] as const
 export type District = typeof DISTRICTS[number]
 
 const DISTRICT_COLORS: Record<string, string> = {
-  '일반교구': 'FFBF00',
-  '젊은백성': '00B0F0',
+  // '일반교구': 'FFBF00',
+  // '젊은백성': '00B0F0',
   '결혼':     'FFCCFF',
   '해외':     '92CDDC',
   '군입대':   'CCFFCC',
@@ -386,11 +386,11 @@ function buildNewMemberSheet(
  * 행 구조 (0-indexed):
  *  r=0  : 제목 (col 2~끝 병합)
  *  r=1  : 범례 헤더 "구분" | "내용" (col 1, 2)
- *  r=2~7: 교구별 범례 행 (col 1=교구명, col 2=색상 셀)
+ *  r=2~7: 구분별 범례 행 (col 1=구분명, col 2=색상 셀)
  *  r=8  : 달 (col 0-2 병합 "달", col 3+는 월별 병합)
  *  r=9  : 합계 (노랑 배경, col 0-2 병합, col 3+는 날짜별 합계)
  *  r=10 : 날짜 (col 0-2 병합, col 3+는 일 숫자)
- *  r=11 : 헤더 (또래, 이름, 교구, col 3+는 월별 병합 "세부사항")
+ *  r=11 : 헤더 (또래, 이름, 구분, col 3+는 월별 병합 "세부사항")
  *  r=12+: 청년 데이터 행
  */
 function buildMainSheet(
@@ -415,7 +415,7 @@ function buildMainSheet(
     .sort(([a], [b]) => a - b)
     .map(([month, dates]) => ({ month, dates }))
 
-  // 날짜별 열 오프셋 (col 0=또래, 1=이름, 2=교구, 3+=날짜)
+  // 날짜별 열 오프셋 (col 0=또래, 1=이름, 2=구분, 3+=날짜)
   const dateColOffset = new Map<string, number>()
   let cOff = 3
   for (const { dates } of monthGroups) {
@@ -443,7 +443,7 @@ function buildMainSheet(
   legendHeaderRow[1] = '구분'
   legendHeaderRow[2] = '내용'
 
-  // r=2~7: 교구 범례
+  // r=2~7: 구분 범례
   const legendRows = DISTRICTS.map(name => {
     const row = emptyRow()
     row[1] = name
@@ -471,7 +471,7 @@ function buildMainSheet(
   const headerRow = emptyRow()
   headerRow[0] = '또래'
   headerRow[1] = '이름'
-  headerRow[2] = '교구'
+  headerRow[2] = '구분'
   for (const { dates } of monthGroups) headerRow[dateColOffset.get(dates[0])!] = '세부사항'
 
   // r=12+: 청년 데이터
@@ -542,7 +542,7 @@ function buildMainSheet(
   styleCell(1, 1, { font: { bold: true }, alignment: center })
   styleCell(1, 2, { font: { bold: true }, alignment: center })
 
-  // 교구 범례 (r=2~7)
+  // 구분 범례 (r=2~7)
   DISTRICTS.forEach((name, i) => {
     const r = 2 + i
     const color = DISTRICT_COLORS[name]
@@ -905,7 +905,7 @@ export function downloadYearlyAttendanceGrid(
  * 연간 출석 현황 그리드 엑셀 파싱.
  * "전체" 시트를 우선 탐색하고, 없으면 첫 번째 시트를 사용.
  * 헤더 행은 col 0="또래", col 1="이름"인 행으로 자동 탐색.
- * 날짜는 col 3+에서 읽음 (col 2는 교구).
+ * 날짜는 col 3+에서 읽음 (col 2는 구분).
  */
 export function parseYearlyAttendanceGrid(
   file: File
@@ -953,7 +953,7 @@ export function parseYearlyAttendanceGrid(
           return
         }
 
-        // 날짜 추출: col 3+ (col 2는 교구)
+        // 날짜 추출: col 3+ (col 2는 구분)
         const headerRow = raw[headerRowIdx] as unknown[]
         const DATE_START_COL = 3
         for (let i = DATE_START_COL; i < headerRow.length; i++) {
