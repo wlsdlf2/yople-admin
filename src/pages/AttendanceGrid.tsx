@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { downloadAttendanceTemplate, parseAttendanceFile, downloadYearlyAttendanceGrid, parseYearlyAttendanceGrid } from '../lib/attendanceBulk'
+import { downloadAttendanceGridTemplate, parseAttendanceGridFile, downloadYearlyAttendanceGrid, parseYearlyAttendanceGrid } from '../lib/attendanceBulk'
 import { getCohort, getSundaysInYear, getAttendanceGrade } from '../lib/dateUtils'
 
 type Member = {
@@ -71,18 +71,23 @@ export default function AttendanceGrid() {
   // 과거 연도 목록 조회 (최초 1회)
   useEffect(() => {
     const fetchYears = async () => {
-      const { data } = await supabase
-        .from('attendances')
-        .select('date')
-      if (data) {
-        const years = new Set<number>()
+      const years = new Set<number>()
+      let yearOffset = 0
+      while (true) {
+        const { data } = await supabase
+          .from('attendances')
+          .select('date')
+          .range(yearOffset, yearOffset + 999)
+        if (!data || data.length === 0) break
         for (const row of data as { date: string }[]) {
           const y = new Date(row.date + 'Z').getFullYear()
           if (y < currentYear) years.add(y)
         }
-        const sorted = [currentYear, ...Array.from(years).sort((a, b) => b - a)]
-        setAvailableYears(sorted)
+        if (data.length < 1000) break
+        yearOffset += 1000
       }
+      const sorted = [currentYear, ...Array.from(years).sort((a, b) => b - a)]
+      setAvailableYears(sorted)
     }
     fetchYears()
   }, [currentYear])
@@ -108,32 +113,34 @@ export default function AttendanceGrid() {
           return
         }
 
-        const { data: attData, error: errA } = await supabase
-          .from('attendances')
-          .select('member_id, date, created_at')
-          .gte('date', start)
-          .lte('date', end)
-
-        if (errA) {
-          setError(errA.message)
-          setLoading(false)
-          return
-        }
-
         const attended = new Set<string>()
         const grades = new Map<string, 'A' | 'B' | 'C'>()
         const withData = new Set<string>()
-        for (const a of attData ?? []) {
-          const key = `${a.member_id}_${a.date}`
-          attended.add(key)
-          grades.set(key, getAttendanceGrade((a as { created_at: string }).created_at))
-          withData.add(a.date)
+        let attOffset = 0
+        while (true) {
+          const { data: attBatch, error: errA } = await supabase
+            .from('attendances')
+            .select('member_id, date, created_at')
+            .gte('date', start)
+            .lte('date', end)
+            .range(attOffset, attOffset + 999)
+          if (errA) { setError(errA.message); setLoading(false); return }
+          if (!attBatch || attBatch.length === 0) break
+          for (const a of attBatch) {
+            const key = `${a.member_id}_${a.date}`
+            attended.add(key)
+            grades.set(key, getAttendanceGrade((a as { created_at: string }).created_at))
+            withData.add(a.date)
+          }
+          if (attBatch.length < 1000) break
+          attOffset += 1000
         }
         const { data: visitorData, error: errV } = await supabase
           .from('visitors')
           .select('date, count')
           .gte('date', start)
           .lte('date', end)
+          .limit(100000)
 
         if (errV) {
           setError(errV.message)
@@ -147,27 +154,26 @@ export default function AttendanceGrid() {
           visitorCount.set(vv.date, vv.count)
         }
 
-        const [{ data: pastoralData, error: errP }, { data: pastoralAttData, error: errPA }] = await Promise.all([
-          supabase.from('pastoral_team').select('id, name, role').order('created_at'),
-          supabase
+        const { data: pastoralData, error: errP } = await supabase
+          .from('pastoral_team').select('id, name, role').order('created_at')
+        if (errP) { setError(errP.message); setLoading(false); return }
+
+        const pastoralAttended = new Set<string>()
+        let paOffset = 0
+        while (true) {
+          const { data: paBatch, error: errPA } = await supabase
             .from('pastoral_attendances')
             .select('member_id, date')
             .gte('date', start)
-            .lte('date', end),
-        ])
-        if (errP) {
-          setError(errP.message)
-          setLoading(false)
-          return
-        }
-        if (errPA) {
-          setError(errPA.message)
-          setLoading(false)
-          return
-        }
-        const pastoralAttended = new Set<string>()
-        for (const a of pastoralAttData ?? []) {
-          pastoralAttended.add(`${a.member_id}_${a.date}`)
+            .lte('date', end)
+            .range(paOffset, paOffset + 999)
+          if (errPA) { setError(errPA.message); setLoading(false); return }
+          if (!paBatch || paBatch.length === 0) break
+          for (const a of paBatch) {
+            pastoralAttended.add(`${a.member_id}_${a.date}`)
+          }
+          if (paBatch.length < 1000) break
+          paOffset += 1000
         }
 
         setMembers((memberData ?? []) as Member[])
@@ -192,7 +198,8 @@ export default function AttendanceGrid() {
     const totalByDate = new Map<string, number>()
     for (const d of dates) {
       const mc = members.filter(m => attendedSet.has(`${m.id}_${d}`)).length
-      totalByDate.set(d, mc + (visitorCountByDate.get(d) ?? 0))
+      const pc = pastoralTeam.filter(pm => pastoralAttendedSet.has(`${pm.id}_${d}`)).length
+      totalByDate.set(d, mc + (visitorCountByDate.get(d) ?? 0) + pc)
     }
     const monthMap = new Map<number, string[]>()
     for (const d of dates) {
@@ -234,7 +241,7 @@ export default function AttendanceGrid() {
       }
     }
     return { totalByDate, monthGroups, peerRows, peerDateCount }
-  }, [dates, members, attendedSet, visitorCountByDate])
+  }, [dates, members, attendedSet, visitorCountByDate, pastoralTeam, pastoralAttendedSet])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -249,17 +256,17 @@ export default function AttendanceGrid() {
     setUploadMessage('')
     setUploadResult(null)
     try {
-      const { rows, errors: parseErrors } = await parseAttendanceFile(file)
-      if (rows.length === 0 && parseErrors.length === 0) {
+      const { entries, errors: parseErrors } = await parseAttendanceGridFile(file)
+      if (entries.length === 0 && parseErrors.length === 0) {
         setUploadStatus('error')
-        setUploadMessage('유효한 출석 행이 없습니다. 양식을 확인해 주세요.')
+        setUploadMessage('유효한 출석 데이터가 없습니다. 양식을 확인해 주세요.')
         return
       }
       setUploadStatus('uploading')
       const { data: membersData } = await supabase.from('members').select('id, name, birth_date')
       const nameAndCohortToId = new Map<string, string>()
       const nameToId = new Map<string, string>()
-      const duplicateNames = new Set<string>() // 동명이인 이름 집합
+      const duplicateNames = new Set<string>()
       for (const m of membersData ?? []) {
         const mm = m as { id: string; name: string; birth_date: string | null }
         const name = mm.name?.trim()
@@ -275,31 +282,35 @@ export default function AttendanceGrid() {
           if (!nameAndCohortToId.has(key)) nameAndCohortToId.set(key, mm.id)
         }
       }
+      const gradeTime = { A: '05:00:00', B: '05:15:00', C: '05:30:00' } as const
       let inserted = 0
       let skipped = 0
       let notFound = 0
       const duplicateErrors: string[] = []
-      for (const row of rows) {
-        // 또래 없이 동명이인인 경우 → 등록 불가
-        if (!row.cohort && duplicateNames.has(row.name)) {
-          duplicateErrors.push(`${row.date} ${row.name}: 동명이인이 있어 또래 없이는 등록할 수 없습니다.`)
+      for (const entry of entries) {
+        if (!entry.cohort && duplicateNames.has(entry.name)) {
+          duplicateErrors.push(`${entry.name}: 동명이인이 있어 또래 없이는 등록할 수 없습니다.`)
           continue
         }
-        const key = `${row.name}_${row.cohort}`
-        const memberId = (row.cohort ? nameAndCohortToId.get(key) : undefined) ?? nameToId.get(row.name)
+        const key = `${entry.name}_${entry.cohort}`
+        const memberId = (entry.cohort ? nameAndCohortToId.get(key) : undefined) ?? nameToId.get(entry.name)
         if (!memberId) {
           notFound += 1
           continue
         }
-        const { error: insertErr } = await supabase.from('attendances').insert({
-          member_id: memberId,
-          date: row.date,
-        })
-        if (insertErr) {
-          if (insertErr.code === '23505') skipped += 1
-          else notFound += 1
-        } else {
-          inserted += 1
+        for (const item of entry.items) {
+          const created_at = `${item.date}T${gradeTime[item.grade]}.000Z`
+          const { error: insertErr } = await supabase.from('attendances').insert({
+            member_id: memberId,
+            date: item.date,
+            created_at,
+          })
+          if (insertErr) {
+            if (insertErr.code === '23505') skipped += 1
+            else notFound += 1
+          } else {
+            inserted += 1
+          }
         }
       }
       setUploadResult({ inserted, skipped, notFound, parseErrors, duplicateErrors })
@@ -561,12 +572,12 @@ export default function AttendanceGrid() {
         </summary>
         <div className="px-4 pb-4">
           <p className="text-slate-600 text-sm mb-3">
-            엑셀 양식(날짜, 이름)으로 작성한 파일을 업로드하면 출석 이력이 반영됩니다. 이름은 청년 명단과 정확히 일치해야 합니다.
+            양식을 다운로드 후 청년별 날짜별 A/B/C를 입력하고 업로드하면 등급 포함 출석 이력이 반영됩니다. 이름은 청년 명단과 정확히 일치해야 합니다.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={downloadAttendanceTemplate}
+              onClick={() => downloadAttendanceGridTemplate(year, members, dates)}
               className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
             >
               양식 다운로드
@@ -704,7 +715,7 @@ export default function AttendanceGrid() {
       )}
       {tab !== 'stats' && dates.length > 0 && (
         <div>
-          <h3 className="text-base font-semibold text-slate-700 mb-3">새가족 출석</h3>
+          <h3 className="text-base font-semibold text-slate-700 mb-3">{tab === 'all' ? '청년 출석' : '새가족 출석'}</h3>
           {members.filter((m) => tab === 'all' ? !m.is_new_member : m.is_new_member).length === 0 ? (
             <p className="py-8 text-center text-slate-400 text-sm">
               {tab === 'all' ? '등록된 청년이 없습니다.' : '등록된 새가족이 없습니다.'}
@@ -747,7 +758,8 @@ export default function AttendanceGrid() {
                           {datesWithData.has(d) ? (
                             <span className="text-xs font-semibold text-slate-600">
                               {members.filter((m) => attendedSet.has(`${m.id}_${d}`)).length
-                                + (visitorCountByDate.get(d) ?? 0)}
+                                + (visitorCountByDate.get(d) ?? 0)
+                                + pastoralTeam.filter((pm) => pastoralAttendedSet.has(`${pm.id}_${d}`)).length}
                             </span>
                           ) : null}
                         </td>

@@ -1,9 +1,6 @@
 import * as XLSX from 'xlsx-js-style'
 import { getSundaysInYear, getCohort } from './dateUtils'
 
-const TEMPLATE_HEADERS = ['날짜', '이름', '또래'] as const
-const TEMPLATE_SHEET_NAME = '출석이력'
-
 export const DISTRICTS = ['결혼', '해외', '군입대', '장결자'] as const
 export type District = typeof DISTRICTS[number]
 
@@ -16,10 +13,10 @@ const DISTRICT_COLORS: Record<string, string> = {
   '장결자':   'DDDDDD',
 }
 
-export type AttendanceRow = {
-  date: string
+export type AttendanceGridEntry = {
   name: string
   cohort: string
+  items: { date: string; grade: 'A' | 'B' | 'C' }[]
 }
 
 export type YearlyGridEntry = {
@@ -41,18 +38,20 @@ function normalizeDate(v: unknown): string | null {
   return d.toISOString().slice(0, 10)
 }
 
-/** 출석 이력 일괄 업로드용 엑셀 양식 다운로드 */
-export function downloadAttendanceTemplate(): void {
-  const wsData: string[][] = [
-    [...TEMPLATE_HEADERS],
-    ['2025-01-05', '홍길동', '99'],
-    ['2025-01-12', '김영희', '00'],
-  ]
-  const ws = XLSX.utils.aoa_to_sheet(wsData)
-  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 8 }]
+/** 출석 이력 입력용 양식 다운로드 (전체 시트 레이아웃, 출석 데이터 비어 있음) */
+export function downloadAttendanceGridTemplate(
+  year: number,
+  members: { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
+  sundays: string[]
+): void {
+  const regular = members.filter(m => !m.is_new_member)
+  const mainSheet = buildMainSheet(
+    year, regular, members, sundays,
+    new Set(), new Map(), new Map(), [], new Set()
+  )
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, TEMPLATE_SHEET_NAME)
-  XLSX.writeFile(wb, '출석이력_일괄업로드_양식.xlsx')
+  XLSX.utils.book_append_sheet(wb, mainSheet, '전체')
+  XLSX.writeFile(wb, `출석입력_양식_${year}년.xlsx`)
 }
 
 type PastoralMember = { id: string; name: string; role: string | null }
@@ -1019,52 +1018,128 @@ export function parseYearlyAttendanceGrid(
 }
 
 /**
- * 업로드된 엑셀에서 출석 이력 파싱.
- * 첫 시트, 컬럼: 날짜(YYYY-MM-DD 또는 엑셀 날짜), 이름
+ * 전체 시트 그리드 포맷 엑셀에서 출석 이력 파싱 (A/B/C 등급 포함).
+ * 헤더 행: col 0=또래, col 1=이름, col 2=구분(건너뜀), col 3+=날짜
  */
-export function parseAttendanceFile(
+export function parseAttendanceGridFile(
   file: File
-): Promise<{ rows: AttendanceRow[]; errors: string[] }> {
+): Promise<{ entries: AttendanceGridEntry[]; allDates: string[]; errors: string[] }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
         const data = e.target?.result
         if (!data) {
-          resolve({ rows: [], errors: ['파일을 읽을 수 없습니다.'] })
+          resolve({ entries: [], allDates: [], errors: ['파일을 읽을 수 없습니다.'] })
           return
         }
         const wb = XLSX.read(data, { type: 'array' })
-        const firstSheet = wb.SheetNames[0]
-        if (!firstSheet) {
-          resolve({ rows: [], errors: ['시트가 없습니다.'] })
+        const sheetName = wb.SheetNames.find(n => n === '전체') ?? wb.SheetNames[0]
+        if (!sheetName) {
+          resolve({ entries: [], allDates: [], errors: ['시트가 없습니다.'] })
           return
         }
-        const ws = wb.Sheets[firstSheet]
-        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+        const ws = wb.Sheets[sheetName]
+        const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
         const errors: string[] = []
-        const rows: AttendanceRow[] = []
+        const allDates: string[] = []
+        const entries: AttendanceGridEntry[] = []
 
-        for (let i = 0; i < json.length; i++) {
-          const raw = json[i]
-          const rowNo = i + 2
-          const dateVal = raw['날짜'] ?? raw['날짜 '] ?? ''
-          const date = normalizeDate(dateVal)
-          const name = String(raw['이름'] ?? raw['이름 '] ?? '').trim()
-          const cohort = String(raw['또래'] ?? raw['또래 '] ?? '').trim().padStart(2, '0').slice(-2)
-          if (!date && !name) continue
-          if (!date) {
-            errors.push(`${rowNo}행: 날짜가 비어 있거나 형식이 잘못되었습니다. (YYYY-MM-DD)`)
-            continue
+        // 헤더 행 탐색: col 0=또래, col 1=이름
+        let headerRowIdx = -1
+        for (let ri = 0; ri < raw.length; ri++) {
+          const row = raw[ri] as unknown[]
+          if (String(row[0] ?? '').trim() === '또래' && String(row[1] ?? '').trim() === '이름') {
+            headerRowIdx = ri
+            break
           }
-          if (!name) {
-            errors.push(`${rowNo}행: 이름이 비어 있습니다.`)
-            continue
-          }
-          rows.push({ date, name, cohort })
+        }
+        if (headerRowIdx === -1) {
+          resolve({ entries, allDates, errors: ['헤더 행(또래/이름)을 찾을 수 없습니다.'] })
+          return
         }
 
-        resolve({ rows, errors })
+        const headerRow = raw[headerRowIdx] as unknown[]
+        const DATE_START_COL = 3
+
+        // 연도: 제목 행(r=0) 에서 추출
+        const titleCell = String((raw[0] as unknown[])[2] ?? (raw[0] as unknown[])[0] ?? '').trim()
+        const yearMatch = titleCell.match(/^(\d{4})/)
+        const year = yearMatch ? parseInt(yearMatch[1], 10) : new Date().getFullYear()
+
+        // 달 행(col 0='달') 과 날짜 행(col 0='날짜') 탐색
+        let monthRowIdx = -1, dateRowIdx = -1
+        for (let ri = 0; ri < headerRowIdx; ri++) {
+          const c0 = String((raw[ri] as unknown[])[0] ?? '').trim()
+          if (c0 === '달') monthRowIdx = ri
+          if (c0 === '날짜') dateRowIdx = ri
+        }
+
+        if (monthRowIdx !== -1 && dateRowIdx !== -1) {
+          const monthRow = raw[monthRowIdx] as unknown[]
+          const dateRow  = raw[dateRowIdx]  as unknown[]
+          let currentMonth = 0
+          for (let i = DATE_START_COL; i < headerRow.length; i++) {
+            const monthCell = String(monthRow[i] ?? '').trim()
+            if (monthCell) {
+              const m = monthCell.match(/^(\d+)월/)
+              if (m) currentMonth = parseInt(m[1], 10)
+            }
+            const dayVal = dateRow[i]
+            if (typeof dayVal === 'number' && dayVal > 0 && currentMonth > 0) {
+              const dateStr = `${year}-${String(currentMonth).padStart(2, '0')}-${String(dayVal).padStart(2, '0')}`
+              allDates.push(dateStr)
+            }
+          }
+        } else {
+          // fallback: 헤더 행에서 직접 날짜 파싱 (구형 포맷)
+          for (let i = DATE_START_COL; i < headerRow.length; i++) {
+            const d = normalizeDate(headerRow[i])
+            if (d) allDates.push(d)
+            else if (String(headerRow[i] ?? '').trim())
+              errors.push(`헤더 열 ${XLSX.utils.encode_col(i)}: 날짜 형식 오류 (건너뜀)`)
+          }
+        }
+
+        if (allDates.length === 0) {
+          resolve({ entries, allDates, errors })
+          return
+        }
+
+        // 이름 중복 감지
+        const nameCount = new Map<string, number[]>()
+        for (let ri = headerRowIdx + 1; ri < raw.length; ri++) {
+          const row = raw[ri] as unknown[]
+          const name = String(row[1] ?? '').trim()
+          if (!name) continue
+          const existing = nameCount.get(name) ?? []
+          existing.push(ri + 1)
+          nameCount.set(name, existing)
+        }
+        const duplicateNames = new Set<string>()
+        for (const [name, rows] of nameCount) {
+          if (rows.length > 1) {
+            errors.push(`중복된 이름: '${name}' (${rows.join(', ')}행) — 업로드 제외됨`)
+            duplicateNames.add(name)
+          }
+        }
+
+        const GRADE_MAP: Record<string, 'A' | 'B' | 'C'> = { A: 'A', B: 'B', C: 'C', O: 'A' }
+
+        for (let ri = headerRowIdx + 1; ri < raw.length; ri++) {
+          const row = raw[ri] as unknown[]
+          const name = String(row[1] ?? '').trim()
+          if (!name || duplicateNames.has(name)) continue
+          const cohort = String(row[0] ?? '').trim()
+          const items: { date: string; grade: 'A' | 'B' | 'C' }[] = []
+          for (let ci = 0; ci < allDates.length; ci++) {
+            const val = String(row[DATE_START_COL + ci] ?? '').trim().toUpperCase()
+            if (val in GRADE_MAP) items.push({ date: allDates[ci], grade: GRADE_MAP[val] })
+          }
+          if (items.length > 0) entries.push({ name, cohort, items })
+        }
+
+        resolve({ entries, allDates, errors })
       } catch (err) {
         reject(err)
       }
