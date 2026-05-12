@@ -326,77 +326,18 @@ export default function AttendanceGrid() {
     }
   }
 
-  const handleDownloadYear = async () => {
+  const handleDownloadYear = () => {
     setDownloadLoading(true)
     setDownloadError(null)
     try {
-      const start = `${year}-01-01`
-      const end = `${year}-12-31`
-      const [
-        { data: memberData, error: errM },
-        { data: attData, error: errA },
-        { data: visitorData, error: errV },
-        { data: pastoralData, error: errP },
-        { data: pastoralAttData, error: errPA },
-      ] = await Promise.all([
-        supabase
-          .from('members')
-          .select('id, name, birth_date, is_new_member, district')
-          .order('birth_date', { ascending: true, nullsFirst: false })
-          .order('name'),
-        supabase
-          .from('attendances')
-          .select('member_id, date, created_at')
-          .gte('date', start)
-          .lte('date', end)
-          .limit(100000),
-        supabase
-          .from('visitors')
-          .select('date, count')
-          .gte('date', start)
-          .lte('date', end)
-          .limit(100000),
-        supabase.from('pastoral_team').select('id, name, role').order('created_at'),
-        supabase
-          .from('pastoral_attendances')
-          .select('member_id, date, created_at')
-          .gte('date', start)
-          .lte('date', end)
-          .limit(100000),
-      ])
-      if (errM) throw new Error(errM.message)
-      if (errA) throw new Error(errA.message)
-      if (errV) throw new Error(errV.message)
-      if (errP) throw new Error(errP.message)
-      if (errPA) throw new Error(errPA.message)
-
-      const set = new Set<string>()
-      const gradeMap = new Map<string, 'A' | 'B' | 'C'>()
-      for (const a of attData ?? []) {
-        const rec = a as { member_id: string; date: string; created_at: string }
-        set.add(`${rec.member_id}_${rec.date}`)
-        gradeMap.set(`${rec.member_id}_${rec.date}`, getAttendanceGrade(rec.created_at))
-      }
-      const visitorCountByDate = new Map<string, number>()
-      for (const v of visitorData ?? []) {
-        const rec = v as { date: string; count: number }
-        visitorCountByDate.set(rec.date, rec.count)
-      }
-      const pastoralSet = new Set<string>()
-      for (const a of pastoralAttData ?? []) {
-        const rec = a as { member_id: string; date: string; created_at: string }
-        pastoralSet.add(`${rec.member_id}_${rec.date}`)
-        gradeMap.set(`${rec.member_id}_${rec.date}`, getAttendanceGrade(rec.created_at))
-      }
-
       downloadYearlyAttendanceGrid(
         year,
-        (memberData ?? []) as { id: string; name: string; birth_date: string | null; is_new_member: boolean; district: string | null }[],
-        set,
+        members,
+        attendedSet,
         gradeMap,
         visitorCountByDate,
-        (pastoralData ?? []) as { id: string; name: string; role: string | null }[],
-        pastoralSet
+        pastoralTeam,
+        pastoralAttendedSet,
       )
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : '다운로드 실패')
