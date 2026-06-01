@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 const links = [
@@ -28,25 +27,11 @@ type NavbarProps = {
   onClose?: () => void
 }
 
-export function Navbar({ userRole, collapsed, onToggle, onHoverChange, isMobile = false, onClose }: NavbarProps) {
-  const [hovered, setHovered] = useState(false)
+export function Navbar({ userRole, collapsed, onToggle, onHoverChange: _onHoverChange, isMobile = false, onClose }: NavbarProps) {
   const canManageApprovals = userRole === 'admin' || userRole === 'owner'
   const canAccessSettings = userRole === 'admin' || userRole === 'owner' || userRole === 'manager'
   const canAccessPastoral = userRole === 'owner' || userRole === 'admin' || userRole === 'manager'
-  const isExpanded = isMobile ? !collapsed : (!collapsed || hovered)
-
-  const handleMouseEnter = () => {
-    if (!isMobile && collapsed) {
-      setHovered(true)
-      onHoverChange(true)
-    }
-  }
-  const handleMouseLeave = () => {
-    if (!isMobile) {
-      setHovered(false)
-      onHoverChange(false)
-    }
-  }
+  const isExpanded = isMobile ? !collapsed : !collapsed
 
   return (
     <>
@@ -59,8 +44,6 @@ export function Navbar({ userRole, collapsed, onToggle, onHoverChange, isMobile 
           ? `fixed inset-y-0 left-0 z-50 w-52 bg-white border-r border-slate-200 flex flex-col shadow-xl transition-transform duration-200 ${collapsed ? '-translate-x-full' : 'translate-x-0'}`
           : `flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-200 overflow-hidden ${isExpanded ? 'w-52' : 'w-10'}`
       }
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
       {/* 토글 버튼 */}
       <div className="flex justify-end px-2 pt-2">

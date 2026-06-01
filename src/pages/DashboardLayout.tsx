@@ -16,7 +16,6 @@ export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
   )
-  const [sidebarHovered, setSidebarHovered] = useState(false)
 
   useEffect(() => {
     const check = async () => {
@@ -113,7 +112,7 @@ export default function DashboardLayout() {
         userRole={userRole}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((c) => !c)}
-        onHoverChange={setSidebarHovered}
+        onHoverChange={() => {}}
         isMobile={isMobile}
         onClose={() => setSidebarCollapsed(true)}
       />
@@ -146,7 +145,7 @@ export default function DashboardLayout() {
           </button>
         </header>
         <main className="p-4 sm:p-6 flex-1 overflow-auto">
-          <div className={sidebarCollapsed && !sidebarHovered ? 'w-full' : 'max-w-4xl mx-auto'}>
+          <div className={sidebarCollapsed ? 'w-full' : 'max-w-4xl mx-auto'}>
             <Outlet context={{ userRole }} />
           </div>
         </main>
