@@ -48,6 +48,7 @@ export default function AttendanceDetail() {
   const [attendedOpen, setAttendedOpen] = useState(true)
   const [absentOpen, setAbsentOpen] = useState(true)
   const [visitorOpen, setVisitorOpen] = useState(true)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
@@ -80,6 +81,11 @@ export default function AttendanceDetail() {
   useEffect(() => {
     fetchData()
   }, [fetchData, refreshTrigger])
+
+  const sortedAttendances = [...attendances].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
 
   const attendedMemberIds = new Set(attendances.map((a) => a.member_id).filter(Boolean))
   const pendingTagIds = new Set(pendingTags.map((t) => t.id))
@@ -260,16 +266,34 @@ export default function AttendanceDetail() {
         <>
         {/* 이름 검색 + 태그 출석 추가 */}
         <div className="mb-3 space-y-2">
-          <input
-            ref={nameInputRef}
-            type="text"
-            value={nameInput}
-            onChange={(e) => { setNameInput(e.target.value); setAddError(null) }}
-            onKeyDown={handleNameKeyDown}
-            placeholder="이름 입력 후 Enter"
-            disabled={addLoading}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
-          />
+          <div className="flex items-center justify-between">
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={nameInput}
+              onChange={(e) => { setNameInput(e.target.value); setAddError(null) }}
+              onKeyDown={handleNameKeyDown}
+              placeholder="이름 입력 후 Enter"
+              disabled={addLoading}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+            />
+            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setSortOrder('asc')}
+                className={`cursor-pointer px-3 py-1.5 transition-colors ${sortOrder === 'asc' ? 'bg-primary text-white' : 'bg-white text-slate-500 hover:text-slate-700'}`}
+              >
+                빨리 온 순
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortOrder('desc')}
+                className={`cursor-pointer px-3 py-1.5 border-l border-slate-200 transition-colors ${sortOrder === 'desc' ? 'bg-primary text-white' : 'bg-white text-slate-500 hover:text-slate-700'}`}
+              >
+                최근 온 순
+              </button>
+            </div>
+          </div>
 
           {/* 검색 결과 */}
           {trimmed && (
@@ -338,7 +362,7 @@ export default function AttendanceDetail() {
           <p className="text-slate-500 text-sm">출석한 청년이 없습니다.</p>
         ) : (
           <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            {attendances.map((a) => (
+            {sortedAttendances.map((a) => (
               <li key={a.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   {a.member_id ? (
