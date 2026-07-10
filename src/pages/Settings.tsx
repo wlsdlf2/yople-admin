@@ -21,6 +21,8 @@ export default function Settings() {
 
   // 잠금 화면 설정
   const [lockEnabled, setLockEnabled] = useState(false)
+  const [dawnPrayerEnabled, setDawnPrayerEnabled] = useState(true)
+  const [dawnPrayerSaving, setDawnPrayerSaving] = useState(false)
   const [hasPassword, setHasPassword] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [currentPasswordVerified, setCurrentPasswordVerified] = useState(false)
@@ -63,15 +65,17 @@ export default function Settings() {
         : usersQuery.in('role', ['owner', 'manager', 'staff'])
 
       const [settingsRes, usersRes] = await Promise.all([
-        supabase.from('app_settings').select('key, value').in('key', ['lock_enabled', 'lock_password_hash']),
+        supabase.from('app_settings').select('key, value').in('key', ['lock_enabled', 'lock_password_hash', 'dawn_prayer_enabled']),
         filteredUsersQuery,
       ])
 
       if (settingsRes.data) {
         const lockEnabledRow = settingsRes.data.find(s => s.key === 'lock_enabled')
         const lockPasswordRow = settingsRes.data.find(s => s.key === 'lock_password_hash')
+        const dawnPrayerRow = settingsRes.data.find(s => s.key === 'dawn_prayer_enabled')
         setLockEnabled(lockEnabledRow?.value === 'true')
         setHasPassword(!!lockPasswordRow?.value)
+        setDawnPrayerEnabled(dawnPrayerRow?.value !== 'false')
       }
 
       if (usersRes.data) {
@@ -104,6 +108,20 @@ export default function Settings() {
       alert('설정 저장에 실패했습니다. Supabase app_settings 테이블을 확인해주세요.')
     }
     setSaving(false)
+  }
+
+  const handleDawnPrayerToggle = async () => {
+    const next = !dawnPrayerEnabled
+    setDawnPrayerEnabled(next)
+    setDawnPrayerSaving(true)
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'dawn_prayer_enabled', value: next ? 'true' : 'false', updated_at: new Date().toISOString() })
+    if (error) {
+      setDawnPrayerEnabled(!next)
+      alert('설정 저장에 실패했습니다. Supabase app_settings 테이블을 확인해주세요.')
+    }
+    setDawnPrayerSaving(false)
   }
 
   const handleVerifyCurrentPassword = async () => {
@@ -284,6 +302,32 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* 새벽기도회 출석체크 화면 설정 (admin 전용) */}
+      {currentUserRole === 'admin' && (
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-800">새벽기도회 출석체크 화면 사용</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                비활성화하면 체크인 화면에서 선택 화면 없이 바로 주일 출석체크로 이동합니다
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDawnPrayerToggle}
+              disabled={dawnPrayerSaving}
+              aria-checked={dawnPrayerEnabled}
+              role="switch"
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer ${
+                dawnPrayerEnabled ? 'bg-primary' : 'bg-slate-200'
+              } ${dawnPrayerSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${dawnPrayerEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 사용자 관리 (admin, owner 전용) */}
       {(currentUserRole === 'admin' || currentUserRole === 'owner') && <div className="bg-white rounded-xl border border-slate-200">
