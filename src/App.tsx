@@ -7,6 +7,7 @@ import ResetPassword from './pages/ResetPassword'
 import DashboardLayout from './pages/DashboardLayout'
 import AttendanceGrid from './pages/AttendanceGrid'
 import AttendanceDetail from './pages/AttendanceDetail'
+import DawnPrayerAttendance from './pages/DawnPrayerAttendance'
 import MemberList from './pages/MemberList'
 import MemberDetail from './pages/MemberDetail'
 import AbsentMembers from './pages/AbsentMembers'
@@ -27,6 +28,7 @@ function App() {
           <Route index element={<Navigate to="attendance" replace />} />
           <Route path="attendance" element={<AttendanceGrid />} />
           <Route path="attendance/:date" element={<AttendanceDetail />} />
+          <Route path="dawn-prayer" element={<DawnPrayerAttendance />} />
           <Route path="members" element={<MemberList />} />
           <Route path="members/:id" element={<MemberDetail />} />
           <Route path="absent" element={<AbsentMembers />} />

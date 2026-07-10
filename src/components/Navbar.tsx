@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const links = [
   { to: '/dashboard/attendance', end: false, label: '주일별 출석 현황' },
+  { to: '/dashboard/dawn-prayer', end: false, label: '새벽기도회 출석' },
   { to: '/dashboard/absent', end: false, label: '결석자 조회' },
   { to: '/dashboard/members', end: false, label: '청년 명단' },
 ]
