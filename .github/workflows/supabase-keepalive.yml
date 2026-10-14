@@ -1,0 +1,61 @@
+
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # 매일 오전 10시 17분 (한국 시간)
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Check Supabase database activity
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_TABLE: attendance
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_KEY" ]]; then
+            echo "::error::Supabase secrets are missing."
+            exit 1
+          fi
+
+          # URL 끝의 슬래시 제거
+          BASE_URL="${SUPABASE_URL%/}"
+
+          # 기존 테이블을 읽기 전용으로 조회
+          HTTP_CODE=$(curl \
+            --silent \
+            --show-error \
+            --output /dev/null \
+            --write-out "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 20 \
+            --retry 3 \
+            --retry-all-errors \
+            --get \
+            "${BASE_URL}/rest/v1/${SUPABASE_TABLE}" \
+            --header "apikey: ${SUPABASE_KEY}" \
+            --data-urlencode "select=*" \
+            --data-urlencode "limit=1")
+
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            echo "Supabase database query succeeded."
+          else
+            echo "::error::Supabase returned HTTP ${HTTP_CODE}."
+            exit 1
+          fi
